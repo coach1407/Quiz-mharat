@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
@@ -9,29 +10,30 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyCkpZGifmEtUZDO6JVIrxcm1K_VN9BfC8k",
-    authDomain: "quiz-mharat.firebaseapp.com",
-    databaseURL: "https://quiz-mharat-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "quiz-mharat",
-    storageBucket: "quiz-mharat.firebasestorage.app",
-    messagingSenderId: "66351279972",
-    appId: "1:66351279972:web:558929d2ede8cf58ca9471"
-  };
+const firebaseConfig = {
+apiKey: “AIzaSyCkpZGifmEtUZDO6JVIrxcm1K_VN9BfC8k”,
+authDomain: “quiz-mharat.firebaseapp.com”,
+databaseURL: “https://quiz-mharat-default-rtdb.europe-west1.firebasedatabase.app”,
+projectId: “quiz-mharat”,
+storageBucket: “quiz-mharat.firebasestorage.app”,
+messagingSenderId: “66351279972”,
+appId: “1:66351279972:web:558929d2ede8cf58ca9471”
+};
 
-  try{
-    const fbApp = initializeApp(firebaseConfig);
-    const db = getDatabase(fbApp);
-    // expose a simple global bridge so the rest of the (non-module) script can use it
-    window.__fb = { ref, get, set, remove, db };
-    window.__fbReady = true;
-    window.dispatchEvent(new Event('fbready'));
-  }catch(e){
-    console.error('Firebase init failed', e);
-    document.getElementById('app').innerHTML =
-      '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:#ff3b4e;font-weight:800;">تعذر الاتصال بقاعدة البيانات. تحقق من الإنترنت وأعد تحميل الصفحة.</div>';
-  }
+try{
+const fbApp = initializeApp(firebaseConfig);
+const db = getDatabase(fbApp);
+// expose a simple global bridge so the rest of the (non-module) script can use it
+window.__fb = { ref, get, set, remove, db };
+window.__fbReady = true;
+window.dispatchEvent(new Event(‘fbready’));
+}catch(e){
+console.error(‘Firebase init failed’, e);
+document.getElementById(‘app’).innerHTML =
+‘<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:#ff3b4e;font-weight:800;">تعذر الاتصال بقاعدة البيانات. تحقق من الإنترنت وأعد تحميل الصفحة.</div>’;
+}
 </script>
+
 <style>
   :root{
     --ink:#0b0d1a;
@@ -273,6 +275,7 @@
     .podium-col{width:100px;}
   }
 </style>
+
 </head>
 <body>
 <div id="app">
@@ -304,8 +307,12 @@ function getParam(name){
 }
 
 function fbPath(key){
-  // Firebase Realtime Database keys can't contain '.', '#', '$', '[', ']', '/'
-  // normalize ':' too, just to keep paths simple and predictable
+  // Firebase Realtime Database keys can't contain '.', '#', '$', '[', ']'
+  // our security rules expect a NESTED path for per-question answers:
+  //   quiz_answers/<index>   (parent node "quiz_answers", child = question index)
+  // so 'quiz:answers:0' must become 'quiz_answers/0', NOT 'quiz_answers_0'
+  const m = String(key).match(/^quiz:answers:(\d+)$/);
+  if(m) return 'quiz_answers/' + m[1];
   return String(key).replace(/[.#$\[\]:]/g, '_');
 }
 
@@ -401,487 +408,440 @@ async function renderHostApp(){
         </div>
         <label>نص السؤال</label>
         <textarea rows="2" data-role="text" data-idx="${idx}" placeholder="اكتب نص السؤال هنا...">${escapeHtml(q.text)}</textarea>
-        <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
-          ${COLORS.map(c => `
-            <div class="opt-row">
-              <div class="opt-color c-${c}"></div>
-              <input type="text" style="flex:1" data-role="opt" data-color="${c}" data-idx="${idx}" placeholder="إجابة ${labelColor(c)}" value="${escapeHtml(q.opts[c])}">
-              <input type="radio" class="radio-correct" name="correct-${idx}" data-role="correct" data-color="${c}" data-idx="${idx}" ${q.correct===c ? 'checked':''} title="الإجابة الصحيحة">
-            </div>
-          `).join('')}
+
+```
+    <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+      ${COLORS.map(c => `
+        <div class="opt-row">
+          <div class="opt-color c-${c}"></div>
+          <input type="text" style="flex:1" data-role="opt" data-color="${c}" data-idx="${idx}" placeholder="إجابة ${labelColor(c)}" value="${escapeHtml(q.opts[c])}">
+          <input type="radio" class="radio-correct" name="correct-${idx}" data-role="correct" data-color="${c}" data-idx="${idx}" ${q.correct===c ? 'checked':''} title="الإجابة الصحيحة">
         </div>
-      `;
-      qlist.appendChild(card);
-    });
+      `).join('')}
+    </div>
+  `;
+  qlist.appendChild(card);
+});
 
-    function updateProgress(){
-      const filled = questions.filter(q => q.text.trim() && COLORS.every(c => q.opts[c].trim())).length;
-      document.getElementById('progressPill').textContent = `${filled} / 40 سؤال جاهز`;
-    }
-    updateProgress();
+function updateProgress(){
+  const filled = questions.filter(q => q.text.trim() && COLORS.every(c => q.opts[c].trim())).length;
+  document.getElementById('progressPill').textContent = `${filled} / 40 سؤال جاهز`;
+}
+updateProgress();
 
-    let saveTimeout = null;
-    qlist.addEventListener('input', (e)=>{
-      const t = e.target;
-      const idx = parseInt(t.dataset.idx);
-      if(t.dataset.role === 'text'){ questions[idx].text = t.value; }
-      if(t.dataset.role === 'opt'){ questions[idx].opts[t.dataset.color] = t.value; }
-      updateProgress();
-      clearTimeout(saveTimeout);
-      saveTimeout = setTimeout(()=> safeSet('quiz:questions', questions, true), 400);
-    });
-    qlist.addEventListener('change', (e)=>{
-      const t = e.target;
-      if(t.dataset.role === 'correct'){
-        questions[parseInt(t.dataset.idx)].correct = t.dataset.color;
-        safeSet('quiz:questions', questions, true);
-      }
-    });
-
-    document.getElementById('startLobbyBtn').addEventListener('click', async ()=>{
-      const filled = questions.filter(q => q.text.trim() && COLORS.every(c => q.opts[c].trim())).length;
-      if(filled === 0){ alert('أدخل سؤالاً واحدًا على الأقل قبل البدء.'); return; }
-      await safeSet('quiz:questions', questions, true);
-      await safeSet('quiz:players', {}, true);
-      await safeSet('quiz:scores', {}, true);
-      session = {state:'lobby', currentIndex:-1, questionStartedAt:null, revealed:false};
-      await safeSet('quiz:session', session, true);
-      route();
-    });
+let saveTimeout = null;
+qlist.addEventListener('input', (e)=>{
+  const t = e.target;
+  const idx = parseInt(t.dataset.idx);
+  if(t.dataset.role === 'text'){ questions[idx].text = t.value; }
+  if(t.dataset.role === 'opt'){ questions[idx].opts[t.dataset.color] = t.value; }
+  updateProgress();
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(()=> safeSet('quiz:questions', questions, true), 400);
+});
+qlist.addEventListener('change', (e)=>{
+  const t = e.target;
+  if(t.dataset.role === 'correct'){
+    questions[parseInt(t.dataset.idx)].correct = t.dataset.color;
+    safeSet('quiz:questions', questions, true);
   }
+});
 
-  /* ---------------- LOBBY: QR + joined players ---------------- */
-  async function renderLobby(){
-    const link = window.location.origin + window.location.pathname + '?player=1';
-    app.innerHTML = `
-      <div class="lobby-wrap">
-        <div class="logo-row">
-          <span class="logo-dot" style="background:${COLOR_HEX.blue}"></span>
-          <span class="logo-dot" style="background:${COLOR_HEX.red}"></span>
-          <span class="logo-dot" style="background:${COLOR_HEX.yellow}"></span>
-          <span class="logo-dot" style="background:${COLOR_HEX.green}"></span>
-          <span class="brand display-face">مسابقة السرعة</span>
+document.getElementById('startLobbyBtn').addEventListener('click', async ()=>{
+  const filled = questions.filter(q => q.text.trim() && COLORS.every(c => q.opts[c].trim())).length;
+  if(filled === 0){ alert('أدخل سؤالاً واحدًا على الأقل قبل البدء.'); return; }
+  await safeSet('quiz:questions', questions, true);
+  await safeSet('quiz:players', {}, true);
+  await safeSet('quiz:scores', {}, true);
+  session = {state:'lobby', currentIndex:-1, questionStartedAt:null, revealed:false};
+  await safeSet('quiz:session', session, true);
+  route();
+});
+```
+
+}
+
+/* –––––––– LOBBY: QR + joined players –––––––– */
+async function renderLobby(){
+const link = window.location.origin + window.location.pathname + ‘?player=1’;
+app.innerHTML = `<div class="lobby-wrap"> <div class="logo-row"> <span class="logo-dot" style="background:${COLOR_HEX.blue}"></span> <span class="logo-dot" style="background:${COLOR_HEX.red}"></span> <span class="logo-dot" style="background:${COLOR_HEX.yellow}"></span> <span class="logo-dot" style="background:${COLOR_HEX.green}"></span> <span class="brand display-face">مسابقة السرعة</span> </div> <h1 class="title display-face">امسح وادخل اللعبة</h1> <div class="qr-card"><div id="qrcode"></div></div> <div class="join-link">${link}</div> <div style="display:flex; align-items:center; gap:12px; margin-top:10px;"> <span class="count-pill" id="countPill">0 لاعب</span> <button class="btn small" id="beginBtn" disabled>ابدأ السؤال الأول ▶</button> <button class="btn small ghost" id="backSetupBtn">رجوع للإعداد</button> </div> <div class="players-grid" id="playersGrid"></div> </div>`;
+new QRCode(document.getElementById(‘qrcode’), {
+text: link, width:220, height:220, colorDark:”#0b0d1a”, colorLight:”#ffffff”
+});
+
+```
+document.getElementById('backSetupBtn').addEventListener('click', async ()=>{
+  session.state = 'setup'; await safeSet('quiz:session', session, true); route();
+});
+document.getElementById('beginBtn').addEventListener('click', async ()=>{
+  await startQuestion(0);
+});
+
+pollLobby();
+```
+
+}
+
+async function pollLobby(){
+if(session.state !== ‘lobby’) return;
+const players = await safeGet(‘quiz:players’, true) || {};
+const names = Object.values(players);
+const grid = document.getElementById(‘playersGrid’);
+const countPill = document.getElementById(‘countPill’);
+const beginBtn = document.getElementById(‘beginBtn’);
+if(grid){
+grid.innerHTML = names.map(p => `<div class="player-chip">${escapeHtml(p.name)}</div>`).join(’’);
+countPill.textContent = `${names.length} لاعب`;
+beginBtn.disabled = names.length === 0;
+}
+setTimeout(pollLobby, 1500);
+}
+
+/* –––––––– start a question –––––––– */
+async function startQuestion(index){
+const questions = await safeGet(‘quiz:questions’, true) || [];
+const valid = questions.filter(q => q.text.trim());
+if(index >= valid.length){
+session = {state:‘final’, currentIndex:index, questionStartedAt:null, revealed:false};
+await safeSet(‘quiz:session’, session, true);
+return route();
+}
+await safeSet(‘quiz:answers:’+index, {}, true);
+session = {state:‘question’, currentIndex:index, questionStartedAt: Date.now(), revealed:false};
+await safeSet(‘quiz:session’, session, true);
+route();
+}
+
+/* –––––––– STAGE: show question + live timer + answers –––––––– */
+let stageTimerInterval = null;
+let stagePollInterval = null;
+
+async function renderStage(){
+clearInterval(stageTimerInterval); clearInterval(stagePollInterval);
+const questions = (await safeGet(‘quiz:questions’, true) || []).filter(q => q.text.trim());
+const idx = session.currentIndex;
+const q = questions[idx];
+if(!q){ session.state=‘final’; await safeSet(‘quiz:session’, session, true); return route(); }
+
+```
+app.innerHTML = `
+  <div class="stage">
+    <div class="stage-top">
+      <span class="qnum">سؤال ${idx+1} من ${questions.length}</span>
+      <span class="answered-pill" id="answeredPill">0 / 0 أجابوا</span>
+      <div class="timer-wrap">
+        <div class="timer-ring" id="timerRing" style="--pct:100">
+          <span class="timer-num display-face" id="timerNum">60</span>
         </div>
-        <h1 class="title display-face">امسح وادخل اللعبة</h1>
-        <div class="qr-card"><div id="qrcode"></div></div>
-        <div class="join-link">${link}</div>
-        <div style="display:flex; align-items:center; gap:12px; margin-top:10px;">
-          <span class="count-pill" id="countPill">0 لاعب</span>
-          <button class="btn small" id="beginBtn" disabled>ابدأ السؤال الأول ▶</button>
-          <button class="btn small ghost" id="backSetupBtn">رجوع للإعداد</button>
-        </div>
-        <div class="players-grid" id="playersGrid"></div>
       </div>
-    `;
-    new QRCode(document.getElementById('qrcode'), {
-      text: link, width:220, height:220, colorDark:"#0b0d1a", colorLight:"#ffffff"
-    });
+    </div>
+    <div class="qbox display-face">${escapeHtml(q.text)}</div>
+    <div class="answers-grid" id="answersGrid">
+      ${COLORS.map(c => `
+        <div class="answer-tile tile-${c}" data-color="${c}">
+          <span class="count-badge" id="cnt-${c}">0</span>
+          <div class="shape">${shapeSVG(c)}</div>
+          <span>${escapeHtml(q.opts[c])}</span>
+        </div>
+      `).join('')}
+    </div>
+  </div>
+`;
 
-    document.getElementById('backSetupBtn').addEventListener('click', async ()=>{
-      session.state = 'setup'; await safeSet('quiz:session', session, true); route();
-    });
-    document.getElementById('beginBtn').addEventListener('click', async ()=>{
-      await startQuestion(0);
-    });
+const startedAt = session.questionStartedAt;
+async function tick(){
+  const elapsed = (Date.now() - startedAt) / 1000;
+  const remaining = Math.max(0, QUESTION_TIME - elapsed);
+  const pct = Math.round((remaining / QUESTION_TIME) * 100);
+  const ring = document.getElementById('timerRing');
+  const num = document.getElementById('timerNum');
+  if(ring){ ring.style.setProperty('--pct', pct); num.textContent = Math.ceil(remaining); }
+  if(ring && remaining <= 10){ ring.style.background = `conic-gradient(${COLOR_HEX.red} calc(${pct}*1%), #1c2140 0)`; }
 
-    pollLobby();
-  }
+  const answers = await safeGet('quiz:answers:'+idx, true) || {};
+  const players = await safeGet('quiz:players', true) || {};
+  const totalPlayers = Object.keys(players).length;
+  const answeredCount = Object.keys(answers).length;
+  const pill = document.getElementById('answeredPill');
+  if(pill) pill.textContent = `${answeredCount} / ${totalPlayers} أجابوا`;
+  COLORS.forEach(c => {
+    const n = Object.values(answers).filter(a => a.choice === c).length;
+    const el = document.getElementById('cnt-'+c);
+    if(el) el.textContent = n;
+  });
 
-  async function pollLobby(){
-    if(session.state !== 'lobby') return;
-    const players = await safeGet('quiz:players', true) || {};
-    const names = Object.values(players);
-    const grid = document.getElementById('playersGrid');
-    const countPill = document.getElementById('countPill');
-    const beginBtn = document.getElementById('beginBtn');
-    if(grid){
-      grid.innerHTML = names.map(p => `<div class="player-chip">${escapeHtml(p.name)}</div>`).join('');
-      countPill.textContent = `${names.length} لاعب`;
-      beginBtn.disabled = names.length === 0;
-    }
-    setTimeout(pollLobby, 1500);
-  }
-
-  /* ---------------- start a question ---------------- */
-  async function startQuestion(index){
-    const questions = await safeGet('quiz:questions', true) || [];
-    const valid = questions.filter(q => q.text.trim());
-    if(index >= valid.length){
-      session = {state:'final', currentIndex:index, questionStartedAt:null, revealed:false};
-      await safeSet('quiz:session', session, true);
-      return route();
-    }
-    await safeSet('quiz:answers:'+index, {}, true);
-    session = {state:'question', currentIndex:index, questionStartedAt: Date.now(), revealed:false};
-    await safeSet('quiz:session', session, true);
-    route();
-  }
-
-  /* ---------------- STAGE: show question + live timer + answers ---------------- */
-  let stageTimerInterval = null;
-  let stagePollInterval = null;
-
-  async function renderStage(){
+  const allAnswered = totalPlayers > 0 && answeredCount >= totalPlayers;
+  if(remaining <= 0 || allAnswered){
     clearInterval(stageTimerInterval); clearInterval(stagePollInterval);
-    const questions = (await safeGet('quiz:questions', true) || []).filter(q => q.text.trim());
-    const idx = session.currentIndex;
-    const q = questions[idx];
-    if(!q){ session.state='final'; await safeSet('quiz:session', session, true); return route(); }
-
-    app.innerHTML = `
-      <div class="stage">
-        <div class="stage-top">
-          <span class="qnum">سؤال ${idx+1} من ${questions.length}</span>
-          <span class="answered-pill" id="answeredPill">0 / 0 أجابوا</span>
-          <div class="timer-wrap">
-            <div class="timer-ring" id="timerRing" style="--pct:100">
-              <span class="timer-num display-face" id="timerNum">60</span>
-            </div>
-          </div>
-        </div>
-        <div class="qbox display-face">${escapeHtml(q.text)}</div>
-        <div class="answers-grid" id="answersGrid">
-          ${COLORS.map(c => `
-            <div class="answer-tile tile-${c}" data-color="${c}">
-              <span class="count-badge" id="cnt-${c}">0</span>
-              <div class="shape">${shapeSVG(c)}</div>
-              <span>${escapeHtml(q.opts[c])}</span>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
-
-    const startedAt = session.questionStartedAt;
-    async function tick(){
-      const elapsed = (Date.now() - startedAt) / 1000;
-      const remaining = Math.max(0, QUESTION_TIME - elapsed);
-      const pct = Math.round((remaining / QUESTION_TIME) * 100);
-      const ring = document.getElementById('timerRing');
-      const num = document.getElementById('timerNum');
-      if(ring){ ring.style.setProperty('--pct', pct); num.textContent = Math.ceil(remaining); }
-      if(ring && remaining <= 10){ ring.style.background = `conic-gradient(${COLOR_HEX.red} calc(${pct}*1%), #1c2140 0)`; }
-
-      const answers = await safeGet('quiz:answers:'+idx, true) || {};
-      const players = await safeGet('quiz:players', true) || {};
-      const totalPlayers = Object.keys(players).length;
-      const answeredCount = Object.keys(answers).length;
-      const pill = document.getElementById('answeredPill');
-      if(pill) pill.textContent = `${answeredCount} / ${totalPlayers} أجابوا`;
-      COLORS.forEach(c => {
-        const n = Object.values(answers).filter(a => a.choice === c).length;
-        const el = document.getElementById('cnt-'+c);
-        if(el) el.textContent = n;
-      });
-
-      const allAnswered = totalPlayers > 0 && answeredCount >= totalPlayers;
-      if(remaining <= 0 || allAnswered){
-        clearInterval(stageTimerInterval); clearInterval(stagePollInterval);
-        await revealAndScore(idx, q);
-      }
-    }
-    tick();
-    stageTimerInterval = setInterval(tick, 500);
+    await revealAndScore(idx, q);
   }
+}
+tick();
+stageTimerInterval = setInterval(tick, 500);
+```
 
-  async function revealAndScore(idx, q){
-    // reveal correct answer visually first
-    const grid = document.getElementById('answersGrid');
-    if(grid){
-      grid.querySelectorAll('.answer-tile').forEach(tile => {
-        if(tile.dataset.color === q.correct) tile.classList.add('correct-reveal');
-        else tile.classList.add('dim-reveal');
-      });
-    }
-    await new Promise(r => setTimeout(r, 1800));
+}
 
-    // compute scores: faster correct answer = more points
-    const answers = await safeGet('quiz:answers:'+idx, true) || {};
-    const players = await safeGet('quiz:players', true) || {};
-    let scores = await safeGet('quiz:scores', true) || {};
+async function revealAndScore(idx, q){
+// reveal correct answer visually first
+const grid = document.getElementById(‘answersGrid’);
+if(grid){
+grid.querySelectorAll(’.answer-tile’).forEach(tile => {
+if(tile.dataset.color === q.correct) tile.classList.add(‘correct-reveal’);
+else tile.classList.add(‘dim-reveal’);
+});
+}
+await new Promise(r => setTimeout(r, 1800));
 
-    const correctAnswers = Object.entries(answers)
-      .filter(([pid, a]) => a.choice === q.correct)
-      .sort((a,b) => a[1].answeredAt - b[1].answeredAt);
+```
+// compute scores: faster correct answer = more points
+const answers = await safeGet('quiz:answers:'+idx, true) || {};
+const players = await safeGet('quiz:players', true) || {};
+let scores = await safeGet('quiz:scores', true) || {};
 
-    const n = correctAnswers.length;
-    const deltas = {};
-    correctAnswers.forEach(([pid, a], rank) => {
-      // 1000 pts for 1st correct, decreasing, min 500 floor for any correct answer
-      const pts = n <= 1 ? 1000 : Math.round(1000 - (rank / (n)) * 500);
-      deltas[pid] = pts;
-      scores[pid] = (scores[pid] || 0) + pts;
-    });
-    Object.keys(answers).forEach(pid => { if(!(pid in deltas)) deltas[pid] = 0; });
-    Object.keys(players).forEach(pid => { if(!(pid in scores)) scores[pid] = scores[pid] || 0; });
+const correctAnswers = Object.entries(answers)
+  .filter(([pid, a]) => a.choice === q.correct)
+  .sort((a,b) => a[1].answeredAt - b[1].answeredAt);
 
-    await safeSet('quiz:scores', scores, true);
-    await safeSet('quiz:lastDeltas', deltas, true);
+const n = correctAnswers.length;
+const deltas = {};
+correctAnswers.forEach(([pid, a], rank) => {
+  // 1000 pts for 1st correct, decreasing, min 500 floor for any correct answer
+  const pts = n <= 1 ? 1000 : Math.round(1000 - (rank / (n)) * 500);
+  deltas[pid] = pts;
+  scores[pid] = (scores[pid] || 0) + pts;
+});
+Object.keys(answers).forEach(pid => { if(!(pid in deltas)) deltas[pid] = 0; });
+Object.keys(players).forEach(pid => { if(!(pid in scores)) scores[pid] = scores[pid] || 0; });
 
-    session.state = 'roundresults';
-    await safeSet('quiz:session', session, true);
-    route();
-  }
+await safeSet('quiz:scores', scores, true);
+await safeSet('quiz:lastDeltas', deltas, true);
 
-  /* ---------------- ROUND RESULTS: scoreboard after each question ---------------- */
-  async function renderRoundResults(){
-    const players = await safeGet('quiz:players', true) || {};
-    const scores = await safeGet('quiz:scores', true) || {};
-    const deltas = await safeGet('quiz:lastDeltas', true) || {};
-    const questions = (await safeGet('quiz:questions', true) || []).filter(q => q.text.trim());
-    const idx = session.currentIndex;
-    const isLast = idx >= questions.length - 1;
+session.state = 'roundresults';
+await safeSet('quiz:session', session, true);
+route();
+```
 
-    const rows = Object.entries(players)
-      .map(([pid, p]) => ({pid, name:p.name, total:scores[pid]||0, delta:deltas[pid]||0}))
-      .sort((a,b) => b.total - a.total);
+}
 
-    app.innerHTML = `
-      <div class="results-wrap">
-        <span class="qnum">النتائج بعد سؤال ${idx+1}</span>
-        <h1 class="title display-face">لوحة النقاط</h1>
-        <div class="scoreboard">
-          ${rows.map((r, i) => `
-            <div class="score-row ${i===0?'rank-1':''}">
-              <div class="score-rank">${i+1}</div>
-              <div class="score-name">${escapeHtml(r.name)}</div>
-              <div class="score-delta">${r.delta > 0 ? '+'+r.delta : '—'}</div>
-              <div class="score-total display-face">${r.total}</div>
-            </div>
-          `).join('') || '<div class="score-row"><div class="score-name">لا يوجد لاعبون</div></div>'}
+/* –––––––– ROUND RESULTS: scoreboard after each question –––––––– */
+async function renderRoundResults(){
+const players = await safeGet(‘quiz:players’, true) || {};
+const scores = await safeGet(‘quiz:scores’, true) || {};
+const deltas = await safeGet(‘quiz:lastDeltas’, true) || {};
+const questions = (await safeGet(‘quiz:questions’, true) || []).filter(q => q.text.trim());
+const idx = session.currentIndex;
+const isLast = idx >= questions.length - 1;
+
+```
+const rows = Object.entries(players)
+  .map(([pid, p]) => ({pid, name:p.name, total:scores[pid]||0, delta:deltas[pid]||0}))
+  .sort((a,b) => b.total - a.total);
+
+app.innerHTML = `
+  <div class="results-wrap">
+    <span class="qnum">النتائج بعد سؤال ${idx+1}</span>
+    <h1 class="title display-face">لوحة النقاط</h1>
+    <div class="scoreboard">
+      ${rows.map((r, i) => `
+        <div class="score-row ${i===0?'rank-1':''}">
+          <div class="score-rank">${i+1}</div>
+          <div class="score-name">${escapeHtml(r.name)}</div>
+          <div class="score-delta">${r.delta > 0 ? '+'+r.delta : '—'}</div>
+          <div class="score-total display-face">${r.total}</div>
         </div>
-        <button class="btn" id="nextBtn">${isLast ? 'عرض النتيجة النهائية 🏆' : 'السؤال التالي ▶'}</button>
-      </div>
-    `;
-    document.getElementById('nextBtn').addEventListener('click', ()=> startQuestion(idx+1));
-  }
+      `).join('') || '<div class="score-row"><div class="score-name">لا يوجد لاعبون</div></div>'}
+    </div>
+    <button class="btn" id="nextBtn">${isLast ? 'عرض النتيجة النهائية 🏆' : 'السؤال التالي ▶'}</button>
+  </div>
+`;
+document.getElementById('nextBtn').addEventListener('click', ()=> startQuestion(idx+1));
+```
 
-  /* ---------------- FINAL: podium ---------------- */
-  async function renderFinal(){
-    const players = await safeGet('quiz:players', true) || {};
-    const scores = await safeGet('quiz:scores', true) || {};
-    const rows = Object.entries(players)
-      .map(([pid, p]) => ({pid, name:p.name, total:scores[pid]||0}))
-      .sort((a,b) => b.total - a.total);
+}
 
-    const [first, second, third, ...rest] = rows;
-    app.innerHTML = `
-      <div class="podium-wrap">
-        <span class="brand display-face">🏆 النتيجة النهائية</span>
-        <div class="podium">
-          ${second ? podiumCol(second,2,'p2','🥈') : ''}
-          ${first ? podiumCol(first,1,'p1','🥇') : ''}
-          ${third ? podiumCol(third,3,'p3','🥉') : ''}
-        </div>
-        <div class="rest-list">
-          ${rest.map((r,i) => `
-            <div class="score-row">
-              <div class="score-rank">${i+4}</div>
-              <div class="score-name">${escapeHtml(r.name)}</div>
-              <div class="score-total display-face">${r.total}</div>
-            </div>
-          `).join('')}
-        </div>
-        <button class="btn ghost small" id="restartBtn">لعبة جديدة (إعادة الإعداد)</button>
-      </div>
-    `;
-    document.getElementById('restartBtn').addEventListener('click', async ()=>{
-      if(!confirm('سيتم مسح اللاعبين والنقاط الحالية. متابعة؟')) return;
-      await safeSet('quiz:players', {}, true);
-      await safeSet('quiz:scores', {}, true);
-      session = {state:'lobby', currentIndex:-1, questionStartedAt:null, revealed:false};
-      await safeSet('quiz:session', session, true);
-      route();
-    });
+/* –––––––– FINAL: podium –––––––– */
+async function renderFinal(){
+const players = await safeGet(‘quiz:players’, true) || {};
+const scores = await safeGet(‘quiz:scores’, true) || {};
+const rows = Object.entries(players)
+.map(([pid, p]) => ({pid, name:p.name, total:scores[pid]||0}))
+.sort((a,b) => b.total - a.total);
 
-    function podiumCol(r, place, cls, medal){
-      return `
-        <div class="podium-col ${cls}">
-          <span class="medal">${medal}</span>
-          <span class="podium-name">${escapeHtml(r.name)}</span>
-          <span class="podium-score">${r.total} نقطة</span>
-          <div class="podium-block display-face">${place}</div>
+```
+const [first, second, third, ...rest] = rows;
+app.innerHTML = `
+  <div class="podium-wrap">
+    <span class="brand display-face">🏆 النتيجة النهائية</span>
+    <div class="podium">
+      ${second ? podiumCol(second,2,'p2','🥈') : ''}
+      ${first ? podiumCol(first,1,'p1','🥇') : ''}
+      ${third ? podiumCol(third,3,'p3','🥉') : ''}
+    </div>
+    <div class="rest-list">
+      ${rest.map((r,i) => `
+        <div class="score-row">
+          <div class="score-rank">${i+4}</div>
+          <div class="score-name">${escapeHtml(r.name)}</div>
+          <div class="score-total display-face">${r.total}</div>
         </div>
-      `;
-    }
-  }
+      `).join('')}
+    </div>
+    <button class="btn ghost small" id="restartBtn">لعبة جديدة (إعادة الإعداد)</button>
+  </div>
+`;
+document.getElementById('restartBtn').addEventListener('click', async ()=>{
+  if(!confirm('سيتم مسح اللاعبين والنقاط الحالية. متابعة؟')) return;
+  await safeSet('quiz:players', {}, true);
+  await safeSet('quiz:scores', {}, true);
+  session = {state:'lobby', currentIndex:-1, questionStartedAt:null, revealed:false};
+  await safeSet('quiz:session', session, true);
+  route();
+});
+
+function podiumCol(r, place, cls, medal){
+  return `
+    <div class="podium-col ${cls}">
+      <span class="medal">${medal}</span>
+      <span class="podium-name">${escapeHtml(r.name)}</span>
+      <span class="podium-score">${r.total} نقطة</span>
+      <div class="podium-block display-face">${place}</div>
+    </div>
+  `;
+}
+```
+
+}
 }
 
 /* ================================================================
-   PLAYER APP (opened on phones)
-   ================================================================ */
+PLAYER APP (opened on phones)
+================================================================ */
 async function renderPlayerApp(){
-  let myId = localStorage.getItem ? null : null; // never use localStorage per policy; use in-memory + storage
-  let playerId = sessionStorageFallback();
+let myId = localStorage.getItem ? null : null; // never use localStorage per policy; use in-memory + storage
+let playerId = sessionStorageFallback();
 
-  function sessionStorageFallback(){
-    // in-memory per tab; re-generated if page reloads (acceptable for single event use)
-    if(window.__playerId) return window.__playerId;
-    window.__playerId = uid();
-    return window.__playerId;
-  }
+function sessionStorageFallback(){
+// in-memory per tab; re-generated if page reloads (acceptable for single event use)
+if(window.__playerId) return window.__playerId;
+window.__playerId = uid();
+return window.__playerId;
+}
 
-  let myName = null;
+let myName = null;
 
-  renderJoin();
+renderJoin();
 
-  function renderJoin(){
-    app.innerHTML = `
-      <div class="player-wrap">
-        <div class="center-col">
-          <div class="logo-row">
-            <span class="logo-dot" style="background:${COLOR_HEX.blue}"></span>
-            <span class="logo-dot" style="background:${COLOR_HEX.red}"></span>
-            <span class="logo-dot" style="background:${COLOR_HEX.yellow}"></span>
-            <span class="logo-dot" style="background:${COLOR_HEX.green}"></span>
-          </div>
-          <h1 class="title display-face">سجّل اسمك</h1>
-          <p class="subtitle">اكتب اسمك كما تريد أن يظهر على الشاشة</p>
-          <div style="max-width:320px; width:100%; display:flex; flex-direction:column; gap:14px;">
-            <input type="text" id="nameInput" placeholder="مثال: خالد" maxlength="20">
-            <button class="btn" id="joinBtn">دخول اللعبة ▶</button>
-          </div>
-        </div>
-      </div>
-    `;
-    document.getElementById('joinBtn').addEventListener('click', join);
-    document.getElementById('nameInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') join(); });
-  }
+function renderJoin(){
+app.innerHTML = `<div class="player-wrap"> <div class="center-col"> <div class="logo-row"> <span class="logo-dot" style="background:${COLOR_HEX.blue}"></span> <span class="logo-dot" style="background:${COLOR_HEX.red}"></span> <span class="logo-dot" style="background:${COLOR_HEX.yellow}"></span> <span class="logo-dot" style="background:${COLOR_HEX.green}"></span> </div> <h1 class="title display-face">سجّل اسمك</h1> <p class="subtitle">اكتب اسمك كما تريد أن يظهر على الشاشة</p> <div style="max-width:320px; width:100%; display:flex; flex-direction:column; gap:14px;"> <input type="text" id="nameInput" placeholder="مثال: خالد" maxlength="20"> <button class="btn" id="joinBtn">دخول اللعبة ▶</button> </div> </div> </div>`;
+document.getElementById(‘joinBtn’).addEventListener(‘click’, join);
+document.getElementById(‘nameInput’).addEventListener(‘keydown’, (e)=>{ if(e.key===‘Enter’) join(); });
+}
 
-  async function join(){
-    const val = document.getElementById('nameInput').value.trim();
-    if(!val){ return; }
-    myName = val;
-    const players = await safeGet('quiz:players', true) || {};
-    players[playerId] = {name: myName, joinedAt: Date.now()};
-    await safeSet('quiz:players', players, true);
-    renderWaitingLoop();
-  }
+async function join(){
+const val = document.getElementById(‘nameInput’).value.trim();
+if(!val){ return; }
+myName = val;
+const players = await safeGet(‘quiz:players’, true) || {};
+players[playerId] = {name: myName, joinedAt: Date.now()};
+await safeSet(‘quiz:players’, players, true);
+renderWaitingLoop();
+}
 
-  async function renderWaitingLoop(){
-    let lastState = null;
-    async function loop(){
-      const session = await safeGet('quiz:session', true) || {state:'lobby'};
-      if(session.state !== lastState){
-        lastState = session.state;
-        if(session.state === 'lobby' || session.state === 'setup'){
-          renderWaiting();
-        } else if(session.state === 'question'){
-          renderColorButtons(session.currentIndex);
-        } else if(session.state === 'reveal' || session.state === 'roundresults'){
-          renderMyResult(session.currentIndex);
-        } else if(session.state === 'final'){
-          renderMyFinal();
-        }
-      }
-      setTimeout(loop, 900);
-    }
-    loop();
-  }
+async function renderWaitingLoop(){
+let lastState = null;
+async function loop(){
+const session = await safeGet(‘quiz:session’, true) || {state:‘lobby’};
+if(session.state !== lastState){
+lastState = session.state;
+if(session.state === ‘lobby’ || session.state === ‘setup’){
+renderWaiting();
+} else if(session.state === ‘question’){
+renderColorButtons(session.currentIndex);
+} else if(session.state === ‘reveal’ || session.state === ‘roundresults’){
+renderMyResult(session.currentIndex);
+} else if(session.state === ‘final’){
+renderMyFinal();
+}
+}
+setTimeout(loop, 900);
+}
+loop();
+}
 
-  function renderWaiting(){
-    app.innerHTML = `
-      <div class="player-wrap">
-        <div class="waiting-box">
-          <span class="player-name-tag">${escapeHtml(myName)}</span>
-          <div class="pulse-dot"></div>
-          <p class="subtitle">بانتظار بدء اللعبة على الشاشة الكبيرة...</p>
-        </div>
-      </div>
-    `;
-  }
+function renderWaiting(){
+app.innerHTML = `<div class="player-wrap"> <div class="waiting-box"> <span class="player-name-tag">${escapeHtml(myName)}</span> <div class="pulse-dot"></div> <p class="subtitle">بانتظار بدء اللعبة على الشاشة الكبيرة...</p> </div> </div>`;
+}
 
-  let currentQIdx = null;
-  let hasAnsweredThisQ = false;
+let currentQIdx = null;
+let hasAnsweredThisQ = false;
 
-  async function renderColorButtons(idx){
-    currentQIdx = idx;
-    hasAnsweredThisQ = false;
-    const answers = await safeGet('quiz:answers:'+idx, true) || {};
-    if(answers[playerId]){ hasAnsweredThisQ = true; }
+async function renderColorButtons(idx){
+currentQIdx = idx;
+hasAnsweredThisQ = false;
+const answers = await safeGet(‘quiz:answers:’+idx, true) || {};
+if(answers[playerId]){ hasAnsweredThisQ = true; }
 
-    if(hasAnsweredThisQ){
-      renderLocked();
-      return;
-    }
+```
+if(hasAnsweredThisQ){
+  renderLocked();
+  return;
+}
 
-    app.innerHTML = `
-      <div class="player-wrap">
-        <div class="colors-grid" id="colorsGrid">
-          ${COLORS.map(c => `
-            <button class="color-btn c-${c}" data-color="${c}">${shapeSVG(c)}</button>
-          `).join('')}
-        </div>
-      </div>
-    `;
-    document.querySelectorAll('.color-btn').forEach(btn => {
-      btn.addEventListener('click', async ()=>{
-        if(hasAnsweredThisQ) return;
-        hasAnsweredThisQ = true;
-        const color = btn.dataset.color;
-        const answers2 = await safeGet('quiz:answers:'+idx, true) || {};
-        if(answers2[playerId]) { renderLocked(); return; } // already answered (race safety)
-        answers2[playerId] = {choice: color, answeredAt: Date.now()};
-        await safeSet('quiz:answers:'+idx, answers2, true);
-        renderLocked(color);
-      });
-    });
-  }
+app.innerHTML = `
+  <div class="player-wrap">
+    <div class="colors-grid" id="colorsGrid">
+      ${COLORS.map(c => `
+        <button class="color-btn c-${c}" data-color="${c}">${shapeSVG(c)}</button>
+      `).join('')}
+    </div>
+  </div>
+`;
+document.querySelectorAll('.color-btn').forEach(btn => {
+  btn.addEventListener('click', async ()=>{
+    if(hasAnsweredThisQ) return;
+    hasAnsweredThisQ = true;
+    const color = btn.dataset.color;
+    const answers2 = await safeGet('quiz:answers:'+idx, true) || {};
+    if(answers2[playerId]) { renderLocked(); return; } // already answered (race safety)
+    answers2[playerId] = {choice: color, answeredAt: Date.now()};
+    await safeSet('quiz:answers:'+idx, answers2, true);
+    renderLocked(color);
+  });
+});
+```
 
-  function renderLocked(chosenColor){
-    app.innerHTML = `
-      <div class="player-wrap">
-        <div class="center-col">
-          ${chosenColor ? `<div class="shape" style="width:70px;height:70px;background:${COLOR_HEX[chosenColor]};border-radius:16px;display:flex;align-items:center;justify-content:center;">${shapeSVG(chosenColor)}</div>` : ''}
-          <p class="locked-msg">تم إرسال إجابتك ✓</p>
-          <p class="subtitle">بانتظار باقي اللاعبين...</p>
-        </div>
-      </div>
-    `;
-  }
+}
 
-  async function renderMyResult(idx){
-    const scores = await safeGet('quiz:scores', true) || {};
-    const deltas = await safeGet('quiz:lastDeltas', true) || {};
-    const myTotal = scores[playerId] || 0;
-    const myDelta = deltas[playerId] || 0;
-    app.innerHTML = `
-      <div class="player-wrap">
-        <div class="center-col">
-          <span class="player-name-tag">${escapeHtml(myName)}</span>
-          <h1 class="title display-face" style="color:${myDelta>0?'var(--green)':'var(--dim)'}">${myDelta>0 ? '+'+myDelta : '0 نقطة'}</h1>
-          <p class="my-score">مجموعك الكلي: ${myTotal} نقطة</p>
-          <p class="subtitle">شاهد الترتيب على الشاشة الكبيرة</p>
-        </div>
-      </div>
-    `;
-  }
+function renderLocked(chosenColor){
+app.innerHTML = `<div class="player-wrap"> <div class="center-col"> ${chosenColor ?`<div class="shape" style="width:70px;height:70px;background:${COLOR_HEX[chosenColor]};border-radius:16px;display:flex;align-items:center;justify-content:center;">${shapeSVG(chosenColor)}</div>`: ''} <p class="locked-msg">تم إرسال إجابتك ✓</p> <p class="subtitle">بانتظار باقي اللاعبين...</p> </div> </div>`;
+}
 
-  async function renderMyFinal(){
-    const players = await safeGet('quiz:players', true) || {};
-    const scores = await safeGet('quiz:scores', true) || {};
-    const rows = Object.entries(players).map(([pid,p]) => ({pid, total:scores[pid]||0})).sort((a,b)=>b.total-a.total);
-    const myRank = rows.findIndex(r => r.pid === playerId) + 1;
-    const myTotal = scores[playerId] || 0;
-    app.innerHTML = `
-      <div class="player-wrap">
-        <div class="center-col">
-          <span class="brand display-face">انتهت اللعبة 🏁</span>
-          <h1 class="title display-face">مركزك: ${myRank}</h1>
-          <p class="my-score">مجموع نقاطك: ${myTotal}</p>
-          <p class="subtitle">${escapeHtml(myName)}، شكراً لمشاركتك!</p>
-        </div>
-      </div>
-    `;
-  }
+async function renderMyResult(idx){
+const scores = await safeGet(‘quiz:scores’, true) || {};
+const deltas = await safeGet(‘quiz:lastDeltas’, true) || {};
+const myTotal = scores[playerId] || 0;
+const myDelta = deltas[playerId] || 0;
+app.innerHTML = `<div class="player-wrap"> <div class="center-col"> <span class="player-name-tag">${escapeHtml(myName)}</span> <h1 class="title display-face" style="color:${myDelta>0?'var(--green)':'var(--dim)'}">${myDelta>0 ? '+'+myDelta : '0 نقطة'}</h1> <p class="my-score">مجموعك الكلي: ${myTotal} نقطة</p> <p class="subtitle">شاهد الترتيب على الشاشة الكبيرة</p> </div> </div>`;
+}
+
+async function renderMyFinal(){
+const players = await safeGet(‘quiz:players’, true) || {};
+const scores = await safeGet(‘quiz:scores’, true) || {};
+const rows = Object.entries(players).map(([pid,p]) => ({pid, total:scores[pid]||0})).sort((a,b)=>b.total-a.total);
+const myRank = rows.findIndex(r => r.pid === playerId) + 1;
+const myTotal = scores[playerId] || 0;
+app.innerHTML = `<div class="player-wrap"> <div class="center-col"> <span class="brand display-face">انتهت اللعبة 🏁</span> <h1 class="title display-face">مركزك: ${myRank}</h1> <p class="my-score">مجموع نقاطك: ${myTotal}</p> <p class="subtitle">${escapeHtml(myName)}، شكراً لمشاركتك!</p> </div> </div>`;
+}
 }
 
 function labelColor(c){
-  return {blue:'الأزرق', red:'الأحمر', yellow:'الأصفر', green:'الأخضر'}[c];
+return {blue:‘الأزرق’, red:‘الأحمر’, yellow:‘الأصفر’, green:‘الأخضر’}[c];
 }
 function escapeHtml(str){
-  return String(str||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+return String(str||’’).replace(/[&<>”’]/g, m => ({’&’:’&’,’<’:’<’,’>’:’>’,’”’:’"’,”’”:’'’}[m]));
 }
 </script>
+
 </body>
 </html>
