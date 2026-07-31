@@ -128,8 +128,31 @@
     animation:pop .35s ease;
   }
   @keyframes pop{from{transform:scale(.6);opacity:0;} to{transform:scale(1);opacity:1;}}
+  @keyframes confettiFall{
+    0%{ transform:translateY(0) rotate(0deg); opacity:1; }
+    100%{ transform:translateY(115vh) rotate(540deg); opacity:.3; }
+  }
   .count-pill{
     background:var(--gold); color:#2a1c00; font-weight:900; padding:6px 18px; border-radius:999px; font-size:14px;
+  }
+  .chip-remove{
+    background:rgba(255,59,78,.15); color:var(--red); border:1px solid rgba(255,59,78,.4);
+    border-radius:50%; width:22px; height:22px; font-size:13px; font-weight:900; line-height:1;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;
+  }
+  .bonus-btn{
+    background:rgba(255,209,102,.15); color:var(--gold); border:1px solid rgba(255,209,102,.4);
+    border-radius:10px; padding:6px 12px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap;
+  }
+  .bonus-btn.active{background:var(--gold); color:#2a1c00;}
+  .bonus-btn:disabled{opacity:.3; cursor:not-allowed;}
+  .skip-btn{
+    background:rgba(255,59,78,.12); color:var(--red); border:1px solid rgba(255,59,78,.4);
+    border-radius:10px; padding:6px 14px; font-size:13px; font-weight:800; cursor:pointer;
+  }
+  .boost-banner{
+    background:rgba(255,209,102,.12); border:1px solid rgba(255,209,102,.4); color:var(--gold);
+    border-radius:12px; padding:8px 14px; font-size:13px; font-weight:800; text-align:center;
   }
   .stage{flex:1; display:flex; flex-direction:column; padding:20px 28px; gap:14px;}
   .stage-top{display:flex; align-items:center; justify-content:space-between;}
@@ -297,6 +320,23 @@ function shapeSVG(color){
   return shapes[color];
 }
 
+let __audioCtx = null;
+function playBeep(freq, duration){
+  try{
+    if(!__audioCtx) __audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = __audioCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+  }catch(e){ }
+}
+
 const app = document.getElementById('app');
 const isPlayer = getParam('player') === '1';
 
@@ -326,9 +366,55 @@ async function renderHostApp(){
   async function renderSetup(){
     let questions = await safeGet('quiz:questions', true) || [];
     if(questions.length === 0){
-      for(let i=0;i<40;i++){
-        questions.push({text:'', opts:{blue:'',red:'',yellow:'',green:''}, correct:'blue'});
+      for(let i=0;i<5;i++){
+        questions.push({text:'', opts:{blue:'',red:'',yellow:'',green:''}, correct:'blue', double:false});
       }
+    }
+    questions.forEach(q => { if(typeof q.double === 'undefined') q.double = false; });
+
+    function renderList(){
+      const qlist = document.getElementById('qlist');
+      qlist.innerHTML = '';
+      questions.forEach((q, idx) => {
+        const card = document.createElement('div');
+        card.className = 'qcard';
+        card.innerHTML = `
+          <div class="qcard-head">
+            <span class="qcard-num">سؤال ${idx+1}</span>
+            <div style="display:flex; align-items:center; gap:14px;">
+              <label style="display:flex; align-items:center; gap:6px; color:var(--gold); font-size:13px; font-weight:800; cursor:pointer;">
+                <input type="checkbox" data-role="double" data-idx="${idx}" ${q.double ? 'checked':''} style="width:16px;height:16px; accent-color:var(--gold); cursor:pointer;">
+                🔥 مضاعف ×2
+              </label>
+              <button class="chip-remove" data-role="removeQ" data-idx="${idx}" title="حذف السؤال">✕</button>
+            </div>
+          </div>
+          <label>نص السؤال</label>
+          <textarea rows="2" data-role="text" data-idx="${idx}" placeholder="اكتب نص السؤال هنا...">${escapeHtml(q.text)}</textarea>
+          <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+            ${COLORS.map(c => `
+              <div class="opt-row">
+                <div class="opt-color c-${c}"></div>
+                <input type="text" style="flex:1" data-role="opt" data-color="${c}" data-idx="${idx}" placeholder="إجابة ${labelColor(c)}" value="${escapeHtml(q.opts[c])}">
+                <input type="radio" class="radio-correct" name="correct-${idx}" data-role="correct" data-color="${c}" data-idx="${idx}" ${q.correct===c ? 'checked':''} title="الإجابة الصحيحة">
+              </div>
+            `).join('')}
+          </div>
+        `;
+        qlist.appendChild(card);
+      });
+      const addBtn = document.createElement('button');
+      addBtn.className = 'btn ghost';
+      addBtn.style.width = '100%';
+      addBtn.style.marginTop = '6px';
+      addBtn.textContent = '+ إضافة سؤال جديد';
+      addBtn.addEventListener('click', ()=>{
+        questions.push({text:'', opts:{blue:'',red:'',yellow:'',green:''}, correct:'blue', double:false});
+        safeSet('quiz:questions', questions, true);
+        renderList();
+        updateProgress();
+      });
+      qlist.appendChild(addBtn);
     }
 
     app.innerHTML = `
@@ -347,31 +433,11 @@ async function renderHostApp(){
     `;
 
     const qlist = document.getElementById('qlist');
-    questions.forEach((q, idx) => {
-      const card = document.createElement('div');
-      card.className = 'qcard';
-      card.innerHTML = `
-        <div class="qcard-head">
-          <span class="qcard-num">سؤال ${idx+1} / 40</span>
-        </div>
-        <label>نص السؤال</label>
-        <textarea rows="2" data-role="text" data-idx="${idx}" placeholder="اكتب نص السؤال هنا...">${escapeHtml(q.text)}</textarea>
-        <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
-          ${COLORS.map(c => `
-            <div class="opt-row">
-              <div class="opt-color c-${c}"></div>
-              <input type="text" style="flex:1" data-role="opt" data-color="${c}" data-idx="${idx}" placeholder="إجابة ${labelColor(c)}" value="${escapeHtml(q.opts[c])}">
-              <input type="radio" class="radio-correct" name="correct-${idx}" data-role="correct" data-color="${c}" data-idx="${idx}" ${q.correct===c ? 'checked':''} title="الإجابة الصحيحة">
-            </div>
-          `).join('')}
-        </div>
-      `;
-      qlist.appendChild(card);
-    });
+    renderList();
 
     function updateProgress(){
       const filled = questions.filter(q => q.text.trim() && COLORS.every(c => q.opts[c].trim())).length;
-      document.getElementById('progressPill').textContent = `${filled} / 40 سؤال جاهز`;
+      document.getElementById('progressPill').textContent = `${filled} / ${questions.length} سؤال جاهز`;
     }
     updateProgress();
 
@@ -391,6 +457,20 @@ async function renderHostApp(){
         questions[parseInt(t.dataset.idx)].correct = t.dataset.color;
         safeSet('quiz:questions', questions, true);
       }
+      if(t.dataset.role === 'double'){
+        questions[parseInt(t.dataset.idx)].double = t.checked;
+        safeSet('quiz:questions', questions, true);
+      }
+    });
+    qlist.addEventListener('click', (e)=>{
+      const btn = e.target.closest('[data-role="removeQ"]');
+      if(!btn) return;
+      const idx = parseInt(btn.dataset.idx);
+      if(questions.length <= 1){ alert('لازم يبقى سؤال واحد على الأقل.'); return; }
+      questions.splice(idx, 1);
+      safeSet('quiz:questions', questions, true);
+      renderList();
+      updateProgress();
     });
 
     document.getElementById('startLobbyBtn').addEventListener('click', async ()=>{
@@ -437,6 +517,20 @@ async function renderHostApp(){
     document.getElementById('beginBtn').addEventListener('click', async ()=>{
       await startQuestion(0);
     });
+    document.getElementById('playersGrid').addEventListener('click', async (e)=>{
+      const btn = e.target.closest('.chip-remove');
+      if(!btn) return;
+      const pid = btn.dataset.pid;
+      const players = await safeGet('quiz:players', true) || {};
+      delete players[pid];
+      await safeSet('quiz:players', players, true);
+      const scores = await safeGet('quiz:scores', true) || {};
+      delete scores[pid];
+      await safeSet('quiz:scores', scores, true);
+      const bonusUsed = await safeGet('quiz:bonusUsed', true) || {};
+      delete bonusUsed[pid];
+      await safeSet('quiz:bonusUsed', bonusUsed, true);
+    });
 
     pollLobby();
   }
@@ -444,14 +538,19 @@ async function renderHostApp(){
   async function pollLobby(){
     if(session.state !== 'lobby') return;
     const players = await safeGet('quiz:players', true) || {};
-    const names = Object.values(players);
+    const entries = Object.entries(players);
     const grid = document.getElementById('playersGrid');
     const countPill = document.getElementById('countPill');
     const beginBtn = document.getElementById('beginBtn');
     if(grid){
-      grid.innerHTML = names.map(p => `<div class="player-chip">${escapeHtml(p.name)}</div>`).join('');
-      countPill.textContent = `${names.length} لاعب`;
-      beginBtn.disabled = names.length === 0;
+      grid.innerHTML = entries.map(([pid, p]) => `
+        <div class="player-chip" style="display:flex; align-items:center; gap:8px;">
+          <span>${escapeHtml(p.name)}</span>
+          <button class="chip-remove" data-pid="${pid}" title="حذف اللاعب">✕</button>
+        </div>
+      `).join('');
+      countPill.textContent = `${entries.length} لاعب`;
+      beginBtn.disabled = entries.length === 0;
     }
     setTimeout(pollLobby, 1500);
   }
@@ -465,6 +564,9 @@ async function renderHostApp(){
       return route();
     }
     await safeSet('quiz:answers:'+index, {}, true);
+    const queuedBoosts = await safeGet('quiz:bonusQueue', true) || {};
+    await safeSet('quiz:activeBoosts', queuedBoosts, true);
+    await safeSet('quiz:bonusQueue', {}, true);
     session = {state:'question', currentIndex:index, questionStartedAt: Date.now(), revealed:false};
     await safeSet('quiz:session', session, true);
     route();
@@ -480,17 +582,24 @@ async function renderHostApp(){
     const q = questions[idx];
     if(!q){ session.state='final'; await safeSet('quiz:session', session, true); return route(); }
 
+    const players = await safeGet('quiz:players', true) || {};
+    const activeBoosts = await safeGet('quiz:activeBoosts', true) || {};
+    const boostedNames = Object.keys(activeBoosts).map(pid => players[pid]?.name).filter(Boolean);
+
     app.innerHTML = `
       <div class="stage">
         <div class="stage-top">
           <span class="qnum">سؤال ${idx+1} من ${questions.length}</span>
           <span class="answered-pill" id="answeredPill">0 / 0 أجابوا</span>
+          <button class="skip-btn" id="skipBtn">إنهاء السؤال الآن ⏭</button>
           <div class="timer-wrap">
             <div class="timer-ring" id="timerRing" style="--pct:100">
               <span class="timer-num display-face" id="timerNum">60</span>
             </div>
           </div>
         </div>
+        ${q.double ? `<div class="boost-banner" style="background:rgba(255,59,78,.12); border-color:rgba(255,59,78,.4); color:var(--red);">🔥 سؤال مضاعف: كل النقاط ×2 لهذا السؤال!</div>` : ''}
+        ${boostedNames.length ? `<div class="boost-banner">🎁 مضاعفة النقاط مفعّلة لـ: ${boostedNames.map(escapeHtml).join('، ')}</div>` : ''}
         <div class="qbox display-face">${escapeHtml(q.text)}</div>
         <div class="answers-grid" id="answersGrid">
           ${COLORS.map(c => `
@@ -504,6 +613,12 @@ async function renderHostApp(){
       </div>
     `;
 
+    document.getElementById('skipBtn').addEventListener('click', async ()=>{
+      clearInterval(stageTimerInterval); clearInterval(stagePollInterval);
+      await revealAndScore(idx, q);
+    });
+
+    let lastBeepSecond = null;
     const startedAt = session.questionStartedAt;
     async function tick(){
       const elapsed = (Date.now() - startedAt) / 1000;
@@ -511,8 +626,13 @@ async function renderHostApp(){
       const pct = Math.round((remaining / QUESTION_TIME) * 100);
       const ring = document.getElementById('timerRing');
       const num = document.getElementById('timerNum');
-      if(ring){ ring.style.setProperty('--pct', pct); num.textContent = Math.ceil(remaining); }
+      const secondsLeft = Math.ceil(remaining);
+      if(ring){ ring.style.setProperty('--pct', pct); num.textContent = secondsLeft; }
       if(ring && remaining <= 10){ ring.style.background = `conic-gradient(${COLOR_HEX.red} calc(${pct}*1%), #1c2140 0)`; }
+      if(secondsLeft <= 10 && secondsLeft > 0 && secondsLeft !== lastBeepSecond){
+        lastBeepSecond = secondsLeft;
+        playBeep(secondsLeft === 1 ? 1100 : 700, secondsLeft === 1 ? 0.25 : 0.1);
+      }
 
       const answers = await safeGet('quiz:answers:'+idx, true) || {};
       const players = await safeGet('quiz:players', true) || {};
@@ -549,6 +669,7 @@ async function renderHostApp(){
     const answers = await safeGet('quiz:answers:'+idx, true) || {};
     const players = await safeGet('quiz:players', true) || {};
     let scores = await safeGet('quiz:scores', true) || {};
+    const activeBoosts = await safeGet('quiz:activeBoosts', true) || {};
 
     const correctAnswers = Object.entries(answers)
       .filter(([pid, a]) => a.choice === q.correct)
@@ -557,7 +678,9 @@ async function renderHostApp(){
     const n = correctAnswers.length;
     const deltas = {};
     correctAnswers.forEach(([pid, a], rank) => {
-      const pts = n <= 1 ? 1000 : Math.round(1000 - (rank / (n)) * 500);
+      let pts = n <= 1 ? 1000 : Math.round(1000 - (rank / (n)) * 500);
+      if(q.double) pts = pts * 2;
+      if(activeBoosts[pid]) pts = pts * 2;
       deltas[pid] = pts;
       scores[pid] = (scores[pid] || 0) + pts;
     });
@@ -566,6 +689,7 @@ async function renderHostApp(){
 
     await safeSet('quiz:scores', scores, true);
     await safeSet('quiz:lastDeltas', deltas, true);
+    await safeSet('quiz:activeBoosts', {}, true);
 
     session.state = 'roundresults';
     await safeSet('quiz:session', session, true);
@@ -579,28 +703,89 @@ async function renderHostApp(){
     const questions = (await safeGet('quiz:questions', true) || []).filter(q => q.text.trim());
     const idx = session.currentIndex;
     const isLast = idx >= questions.length - 1;
+    const bonusUsed = await safeGet('quiz:bonusUsed', true) || {};
+    const bonusQueue = await safeGet('quiz:bonusQueue', true) || {};
 
     const rows = Object.entries(players)
       .map(([pid, p]) => ({pid, name:p.name, total:scores[pid]||0, delta:deltas[pid]||0}))
       .sort((a,b) => b.total - a.total);
+
+    let rankMoveMap = {};
+    if(idx > 0){
+      const prevOrder = rows.map(r => ({pid:r.pid, prevTotal: r.total - r.delta}))
+        .sort((a,b) => b.prevTotal - a.prevTotal);
+      const prevRank = {}; prevOrder.forEach((r,i) => { prevRank[r.pid] = i; });
+      const curRank = {}; rows.forEach((r,i) => { curRank[r.pid] = i; });
+      rows.forEach(r => { rankMoveMap[r.pid] = prevRank[r.pid] - curRank[r.pid]; });
+    }
 
     app.innerHTML = `
       <div class="results-wrap">
         <span class="qnum">النتائج بعد سؤال ${idx+1}</span>
         <h1 class="title display-face">لوحة النقاط</h1>
         <div class="scoreboard">
-          ${rows.map((r, i) => `
+          ${rows.map((r, i) => {
+            const move = rankMoveMap[r.pid] || 0;
+            const moveHtml = move > 0
+              ? `<span style="color:var(--green); font-size:12px; font-weight:800;">▲${move}</span>`
+              : move < 0
+                ? `<span style="color:var(--red); font-size:12px; font-weight:800;">▼${Math.abs(move)}</span>`
+                : `<span style="color:var(--dim); font-size:12px;">—</span>`;
+            return `
             <div class="score-row ${i===0?'rank-1':''}">
               <div class="score-rank">${i+1}</div>
               <div class="score-name">${escapeHtml(r.name)}</div>
+              ${idx > 0 ? `<div style="min-width:28px; text-align:center;">${moveHtml}</div>` : ''}
               <div class="score-delta">${r.delta > 0 ? '+'+r.delta : '—'}</div>
               <div class="score-total display-face">${r.total}</div>
             </div>
-          `).join('') || '<div class="score-row"><div class="score-name">لا يوجد لاعبون</div></div>'}
+          `;
+          }).join('') || '<div class="score-row"><div class="score-name">لا يوجد لاعبون</div></div>'}
         </div>
+        ${!isLast && rows.length ? `
+        <div class="scoreboard" id="bonusPanel">
+          <span class="qnum" style="margin-bottom:4px;">🎁 بونص مضاعفة النقاط (للسؤال القادم)</span>
+          ${rows.map(r => {
+            const used = bonusUsed[r.pid] || 0;
+            const remaining = 2 - used;
+            const queued = !!bonusQueue[r.pid];
+            const disabled = remaining <= 0 && !queued;
+            return `
+              <div class="score-row" style="justify-content:space-between;">
+                <div class="score-name" style="flex:none; min-width:110px;">${escapeHtml(r.name)}</div>
+                <button class="bonus-btn ${queued?'active':''}" data-pid="${r.pid}" ${disabled?'disabled':''}>
+                  ${queued ? '✅ مفعّل - إلغاء' : `🎁 استخدام البونص (${remaining}/2)`}
+                </button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        ` : ''}
         <button class="btn" id="nextBtn">${isLast ? 'عرض النتيجة النهائية 🏆' : 'السؤال التالي ▶'}</button>
       </div>
     `;
+
+    const bonusPanel = document.getElementById('bonusPanel');
+    if(bonusPanel){
+      bonusPanel.addEventListener('click', async (e)=>{
+        const btn = e.target.closest('.bonus-btn');
+        if(!btn || btn.disabled) return;
+        const pid = btn.dataset.pid;
+        const curUsed = await safeGet('quiz:bonusUsed', true) || {};
+        const curQueue = await safeGet('quiz:bonusQueue', true) || {};
+        if(curQueue[pid]){
+          delete curQueue[pid];
+          curUsed[pid] = Math.max(0, (curUsed[pid]||0) - 1);
+        } else {
+          if((curUsed[pid]||0) >= 2) return;
+          curUsed[pid] = (curUsed[pid]||0) + 1;
+          curQueue[pid] = true;
+        }
+        await safeSet('quiz:bonusUsed', curUsed, true);
+        await safeSet('quiz:bonusQueue', curQueue, true);
+        renderRoundResults();
+      });
+    }
     document.getElementById('nextBtn').addEventListener('click', ()=> startQuestion(idx+1));
   }
 
@@ -641,6 +826,8 @@ async function renderHostApp(){
       route();
     });
 
+    if(first) launchConfetti();
+
     function podiumCol(r, place, cls, medal){
       return `
         <div class="podium-col ${cls}">
@@ -650,6 +837,29 @@ async function renderHostApp(){
           <div class="podium-block display-face">${place}</div>
         </div>
       `;
+    }
+
+    function launchConfetti(){
+      const container = document.createElement('div');
+      container.style.cssText = 'position:fixed; inset:0; pointer-events:none; overflow:hidden; z-index:50;';
+      document.body.appendChild(container);
+      const colors = [COLOR_HEX.blue, COLOR_HEX.red, COLOR_HEX.yellow, COLOR_HEX.green, '#ffd166', '#ffffff'];
+      for(let i=0;i<70;i++){
+        const piece = document.createElement('div');
+        const size = 6 + Math.random()*8;
+        const left = Math.random()*100;
+        const delay = Math.random()*0.6;
+        const duration = 2.2 + Math.random()*1.6;
+        const color = colors[Math.floor(Math.random()*colors.length)];
+        const rotate = Math.random()*360;
+        piece.style.cssText = `
+          position:absolute; top:-5%; left:${left}%; width:${size}px; height:${size*0.5}px;
+          background:${color}; opacity:.9; transform:rotate(${rotate}deg);
+          animation: confettiFall ${duration}s ease-in ${delay}s forwards;
+        `;
+        container.appendChild(piece);
+      }
+      setTimeout(()=> container.remove(), 4500);
     }
   }
 }
