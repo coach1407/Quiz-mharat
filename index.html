@@ -33,24 +33,24 @@
 </script>
 <style>
   :root{
-    --ink:#0b0d1a;
-    --ink2:#12162b;
-    --panel:#161b33;
-    --line:rgba(255,255,255,.08);
-    --txt:#f3f4fb;
-    --dim:#8b90b3;
+    --ink:#f4f5fa;
+    --ink2:#ffffff;
+    --panel:#ffffff;
+    --line:rgba(20,25,50,.10);
+    --txt:#1a1e33;
+    --dim:#6b7094;
     --blue:#2d6cff;
     --red:#ff3b4e;
     --yellow:#ffc22e;
     --green:#1fd67a;
-    --gold:#ffd166;
+    --gold:#e0a400;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;height:100%;}
   body{
     background:
-      radial-gradient(1200px 800px at 15% -10%, #1a2350 0%, transparent 55%),
-      radial-gradient(1000px 700px at 110% 10%, #2a1240 0%, transparent 50%),
+      radial-gradient(1200px 800px at 15% -10%, #e8ecff 0%, transparent 55%),
+      radial-gradient(1000px 700px at 110% 10%, #ffe9f5 0%, transparent 50%),
       var(--ink);
     color:var(--txt);
     font-family:'Segoe UI', Tahoma, Arial, sans-serif;
@@ -64,6 +64,7 @@
   }
   #app{min-height:100vh;display:flex;flex-direction:column;}
   .hidden{display:none !important;}
+
   .center-col{
     flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
     padding:24px; text-align:center;
@@ -84,23 +85,26 @@
   .btn.danger{background:linear-gradient(180deg,#ff5468,#c81f34); box-shadow:0 6px 0 #7a0f1d,0 10px 24px rgba(255,59,78,.3);}
   .btn.small{padding:9px 16px; font-size:14px; border-radius:10px;}
   .btn:disabled{opacity:.4; cursor:not-allowed;}
+
   input[type=text]{
-    background:#0e1226; border:1.5px solid var(--line); color:var(--txt);
+    background:#eef0fb; border:1.5px solid var(--line); color:var(--txt);
     font-size:16px; padding:12px 14px; border-radius:12px; outline:none;
     width:100%;
   }
   input[type=text]:focus{border-color:var(--blue);}
   textarea{
-    background:#0e1226; border:1.5px solid var(--line); color:var(--txt);
+    background:#eef0fb; border:1.5px solid var(--line); color:var(--txt);
     font-size:15px; padding:10px 12px; border-radius:10px; outline:none; width:100%;
     font-family:inherit; resize:vertical;
   }
   label{font-size:13px; color:var(--dim); font-weight:700; display:block; margin-bottom:6px;}
+
   .logo-row{display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:6px;}
   .logo-dot{width:14px;height:14px;border-radius:4px;}
   .brand{
     font-size:15px; letter-spacing:3px; color:var(--dim); font-weight:800; text-transform:uppercase;
   }
+
   .role-card{
     background:var(--panel); border:1px solid var(--line); border-radius:20px;
     padding:34px 30px; max-width:440px; width:100%;
@@ -110,13 +114,14 @@
   }
   .subtitle{color:var(--dim); font-size:15px; margin-bottom:26px;}
   .role-btns{display:flex; flex-direction:column; gap:12px;}
+
   .lobby-wrap{flex:1; display:flex; flex-direction:column; align-items:center; padding:30px 20px; gap:18px;}
   .qr-card{
     background:#fff; padding:16px; border-radius:20px; box-shadow:0 20px 60px rgba(0,0,0,.4);
   }
   #qrcode img{display:block; border-radius:6px;}
   .join-link{
-    font-size:16px; color:var(--dim); background:#0e1226; border:1px solid var(--line);
+    font-size:16px; color:var(--dim); background:#eef0fb; border:1px solid var(--line);
     padding:8px 16px; border-radius:10px; direction:ltr; letter-spacing:.5px;
   }
   .players-grid{
@@ -131,6 +136,21 @@
   @keyframes confettiFall{
     0%{ transform:translateY(0) rotate(0deg); opacity:1; }
     100%{ transform:translateY(115vh) rotate(540deg); opacity:.3; }
+  }
+  @keyframes fadeInUp{
+    from{ opacity:0; transform:translateY(14px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+  @keyframes podiumPop{
+    0%{ opacity:0; transform:scale(.6) translateY(20px); }
+    70%{ opacity:1; transform:scale(1.08) translateY(-4px); }
+    100%{ opacity:1; transform:scale(1) translateY(0); }
+  }
+  .podium-reveal{ animation: podiumPop .6s cubic-bezier(.34,1.56,.64,1) forwards; }
+  .winner-pop .podium-block{ animation: winnerGlow 1.4s ease-in-out infinite; }
+  @keyframes winnerGlow{
+    0%,100%{ box-shadow:0 0 0 rgba(255,209,102,0); }
+    50%{ box-shadow:0 0 40px rgba(255,209,102,.7); }
   }
   .count-pill{
     background:var(--gold); color:#2a1c00; font-weight:900; padding:6px 18px; border-radius:999px; font-size:14px;
@@ -154,6 +174,7 @@
     background:rgba(255,209,102,.12); border:1px solid rgba(255,209,102,.4); color:var(--gold);
     border-radius:12px; padding:8px 14px; font-size:13px; font-weight:800; text-align:center;
   }
+
   .stage{flex:1; display:flex; flex-direction:column; padding:20px 28px; gap:14px;}
   .stage-top{display:flex; align-items:center; justify-content:space-between;}
   .qnum{color:var(--dim); font-weight:800; letter-spacing:1px; font-size:14px;}
@@ -162,7 +183,7 @@
     width:56px;height:56px;border-radius:50%;
     display:flex;align-items:center;justify-content:center;
     font-weight:900; font-size:20px;
-    background:conic-gradient(var(--green) calc(var(--pct)*1%), #1c2140 0);
+    background:conic-gradient(var(--green) calc(var(--pct)*1%), #e3e6f4 0);
     position:relative;
   }
   .timer-ring::before{
@@ -199,6 +220,7 @@
     position:absolute; left:14px; top:14px; background:rgba(0,0,0,.35); border-radius:999px;
     padding:4px 12px; font-size:14px; font-weight:900;
   }
+
   .results-wrap{flex:1; display:flex; flex-direction:column; align-items:center; padding:26px; gap:16px;}
   .scoreboard{width:100%; max-width:760px; display:flex; flex-direction:column; gap:10px;}
   .score-row{
@@ -206,7 +228,7 @@
     border-radius:14px; padding:12px 18px;
   }
   .score-rank{
-    width:34px;height:34px;border-radius:50%; background:#0e1226; display:flex;align-items:center;justify-content:center;
+    width:34px;height:34px;border-radius:50%; background:#eef0fb; display:flex;align-items:center;justify-content:center;
     font-weight:900; font-size:15px; flex:0 0 auto; color:var(--dim);
   }
   .score-row.rank-1 .score-rank{background:var(--gold); color:#2a1c00;}
@@ -218,6 +240,7 @@
     display:flex; align-items:center; justify-content:center; gap:2px;
   }
   .score-row{ will-change: transform; }
+
   .podium-wrap{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px; gap:30px;}
   .podium{display:flex; align-items:flex-end; gap:18px;}
   .podium-col{display:flex; flex-direction:column; align-items:center; gap:10px; width:150px;}
@@ -232,6 +255,7 @@
   .p3 .podium-block{height:110px; background:linear-gradient(180deg,#e8b27a,#b06a37); color:#2a1400;}
   .medal{font-size:30px;}
   .rest-list{width:100%; max-width:520px; display:flex; flex-direction:column; gap:8px;}
+
   .setup-wrap{flex:1; padding:22px; max-width:820px; margin:0 auto; width:100%;}
   .qcard{
     background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; margin-bottom:14px;
@@ -244,11 +268,12 @@
   .opt-color.c-yellow{background:var(--yellow);} .opt-color.c-green{background:var(--green);}
   .radio-correct{width:20px;height:20px; accent-color: var(--green); flex:0 0 auto; cursor:pointer;}
   .setup-toolbar{
-    position:sticky; top:0; z-index:5; background:rgba(11,13,26,.92); backdrop-filter:blur(6px);
+    position:sticky; top:0; z-index:5; background:rgba(255,255,255,.92); backdrop-filter:blur(6px);
     padding:14px 0; display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;
     border-bottom:1px solid var(--line); margin-bottom:16px;
   }
   .progress-pill{font-weight:800; color:var(--dim); font-size:14px;}
+
   .player-wrap{flex:1; display:flex; flex-direction:column;}
   .waiting-box{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:20px;}
   .pulse-dot{width:16px;height:16px;border-radius:50%;background:var(--green); animation:pulse 1.4s infinite;}
@@ -269,6 +294,7 @@
   .locked-msg{font-size:20px; font-weight:800; padding:20px;}
   .my-score{font-size:15px; color:var(--dim); margin-top:4px;}
   .player-name-tag{font-weight:900; font-size:20px;}
+
   @media (max-width:720px){
     .answers-grid{grid-template-columns:1fr;}
     .podium{gap:10px;}
@@ -609,7 +635,7 @@ async function renderHostApp(){
         <div class="answers-grid" id="answersGrid">
           ${COLORS.map(c => `
             <div class="answer-tile tile-${c}" data-color="${c}">
-              <span class="count-badge" id="cnt-${c}">0</span>
+              <span class="count-badge" id="cnt-${c}" style="opacity:0;">0</span>
               <div class="shape">${shapeSVG(c)}</div>
               <span>${escapeHtml(q.opts[c])}</span>
             </div>
@@ -633,7 +659,7 @@ async function renderHostApp(){
       const num = document.getElementById('timerNum');
       const secondsLeft = Math.ceil(remaining);
       if(ring){ ring.style.setProperty('--pct', pct); num.textContent = secondsLeft; }
-      if(ring && remaining <= 10){ ring.style.background = `conic-gradient(${COLOR_HEX.red} calc(${pct}*1%), #1c2140 0)`; }
+      if(ring && remaining <= 10){ ring.style.background = `conic-gradient(${COLOR_HEX.red} calc(${pct}*1%), #e3e6f4 0)`; }
       if(secondsLeft <= 10 && secondsLeft > 0 && secondsLeft !== lastBeepSecond){
         lastBeepSecond = secondsLeft;
         playBeep(secondsLeft === 1 ? 1100 : 700, secondsLeft === 1 ? 0.25 : 0.1);
@@ -645,11 +671,6 @@ async function renderHostApp(){
       const answeredCount = Object.keys(answers).length;
       const pill = document.getElementById('answeredPill');
       if(pill) pill.textContent = `${answeredCount} / ${totalPlayers} أجابوا`;
-      COLORS.forEach(c => {
-        const n = Object.values(answers).filter(a => a.choice === c).length;
-        const el = document.getElementById('cnt-'+c);
-        if(el) el.textContent = n;
-      });
 
       const allAnswered = totalPlayers > 0 && answeredCount >= totalPlayers;
       if(remaining <= 0 || allAnswered){
@@ -662,10 +683,19 @@ async function renderHostApp(){
   }
 
   async function revealAndScore(idx, q){
+    const answersForReveal = await safeGet('quiz:answers:'+idx, true) || {};
     const grid = document.getElementById('answersGrid');
     if(grid){
       grid.querySelectorAll('.answer-tile').forEach(tile => {
-        if(tile.dataset.color === q.correct) tile.classList.add('correct-reveal');
+        const c = tile.dataset.color;
+        const cntEl = document.getElementById('cnt-'+c);
+        if(cntEl){
+          const n = Object.values(answersForReveal).filter(a => a.choice === c).length;
+          cntEl.textContent = n;
+          cntEl.style.transition = 'opacity .4s ease';
+          cntEl.style.opacity = '1';
+        }
+        if(c === q.correct) tile.classList.add('correct-reveal');
         else tile.classList.add('dim-reveal');
       });
     }
@@ -789,7 +819,7 @@ async function renderHostApp(){
         .sort((a,b) => b.prevTotal - a.prevTotal);
       prevOrder.forEach((r,i) => board.appendChild(buildRow(r, i+1, r.prevTotal)));
 
-      await new Promise(res => setTimeout(res, 1100));
+      await new Promise(res => setTimeout(res, 1800));
 
       const firstRects = {};
       board.querySelectorAll('.score-row').forEach(el => {
@@ -797,10 +827,10 @@ async function renderHostApp(){
       });
 
       prevOrder.forEach(r => {
-        animateCount(document.getElementById('total-'+r.pid), r.prevTotal, r.total, 900);
+        animateCount(document.getElementById('total-'+r.pid), r.prevTotal, r.total, 1400);
       });
 
-      await new Promise(res => setTimeout(res, 950));
+      await new Promise(res => setTimeout(res, 1500));
 
       rows.forEach(r => {
         const el = board.querySelector(`[data-pid="${r.pid}"]`);
@@ -824,7 +854,7 @@ async function renderHostApp(){
             el.style.transition = 'none';
             el.style.transform = `translateY(${dy}px)`;
             requestAnimationFrame(()=>{
-              el.style.transition = 'transform 750ms cubic-bezier(.22,.85,.25,1)';
+              el.style.transition = 'transform 1100ms cubic-bezier(.22,.85,.25,1)';
               el.style.transform = 'translateY(0)';
             });
           }
@@ -881,37 +911,19 @@ async function renderHostApp(){
     app.innerHTML = `
       <div class="podium-wrap">
         <span class="brand display-face">🏆 النتيجة النهائية</span>
-        <div class="podium">
-          ${second ? podiumCol(second,2,'p2','🥈') : ''}
-          ${first ? podiumCol(first,1,'p1','🥇') : ''}
-          ${third ? podiumCol(third,3,'p3','🥉') : ''}
-        </div>
-        <div class="rest-list">
-          ${rest.map((r,i) => `
-            <div class="score-row">
-              <div class="score-rank">${i+4}</div>
-              <div class="score-name">${escapeHtml(r.name)}</div>
-              <div class="score-total display-face">${r.total}</div>
-            </div>
-          `).join('')}
-        </div>
-        <button class="btn ghost small" id="restartBtn">لعبة جديدة (إعادة الإعداد)</button>
+        <div class="podium" id="podium"></div>
+        <div class="rest-list" id="restList"></div>
+        <button class="btn ghost small hidden" id="restartBtn">لعبة جديدة (إعادة الإعداد)</button>
       </div>
     `;
-    document.getElementById('restartBtn').addEventListener('click', async ()=>{
-      if(!confirm('سيتم مسح اللاعبين والنقاط الحالية. متابعة؟')) return;
-      await safeSet('quiz:players', {}, true);
-      await safeSet('quiz:scores', {}, true);
-      session = {state:'lobby', currentIndex:-1, questionStartedAt:null, revealed:false};
-      await safeSet('quiz:session', session, true);
-      route();
-    });
 
-    if(first) launchConfetti();
+    const podium = document.getElementById('podium');
+    const restListEl = document.getElementById('restList');
+    const restartBtn = document.getElementById('restartBtn');
 
     function podiumCol(r, place, cls, medal){
       return `
-        <div class="podium-col ${cls}">
+        <div class="podium-col ${cls} podium-reveal">
           <span class="medal">${medal}</span>
           <span class="podium-name">${escapeHtml(r.name)}</span>
           <span class="podium-score">${r.total} نقطة</span>
@@ -942,6 +954,50 @@ async function renderHostApp(){
       }
       setTimeout(()=> container.remove(), 4500);
     }
+
+    function playCheer(){
+      const notes = [523.25, 659.25, 783.99, 1046.5, 1046.5];
+      notes.forEach((f,i) => setTimeout(()=> playBeep(f, i===notes.length-1 ? 0.6 : 0.3), i*140));
+    }
+
+    restListEl.innerHTML = rest.map((r,i) => `
+      <div class="score-row" style="opacity:0; animation: fadeInUp .5s ease forwards; animation-delay:${(i*0.1)+0.1}s;">
+        <div class="score-rank">${i+4}</div>
+        <div class="score-name">${escapeHtml(r.name)}</div>
+        <div class="score-total display-face">${r.total}</div>
+      </div>
+    `).join('');
+
+    await new Promise(res => setTimeout(res, rest.length ? 1600 : 500));
+
+    if(third){
+      podium.insertAdjacentHTML('beforeend', podiumCol(third,3,'p3','🥉'));
+      await new Promise(res => setTimeout(res, 1500));
+    }
+    if(second){
+      podium.insertAdjacentHTML('afterbegin', podiumCol(second,2,'p2','🥈'));
+      await new Promise(res => setTimeout(res, 1500));
+    }
+    if(first){
+      const firstHtml = podiumCol(first,1,'p1','🥇');
+      const p2el = podium.querySelector('.podium-col.p2');
+      if(p2el){ p2el.insertAdjacentHTML('afterend', firstHtml); }
+      else { podium.insertAdjacentHTML('afterbegin', firstHtml); }
+      const p1el = podium.querySelector('.podium-col.p1');
+      if(p1el) p1el.classList.add('winner-pop');
+      launchConfetti();
+      playCheer();
+    }
+
+    restartBtn.classList.remove('hidden');
+    restartBtn.addEventListener('click', async ()=>{
+      if(!confirm('سيتم مسح اللاعبين والنقاط الحالية. متابعة؟')) return;
+      await safeSet('quiz:players', {}, true);
+      await safeSet('quiz:scores', {}, true);
+      session = {state:'lobby', currentIndex:-1, questionStartedAt:null, revealed:false};
+      await safeSet('quiz:session', session, true);
+      route();
+    });
   }
 }
 
