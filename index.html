@@ -174,6 +174,12 @@
     background:rgba(255,209,102,.12); border:1px solid rgba(255,209,102,.4); color:var(--gold);
     border-radius:12px; padding:8px 14px; font-size:13px; font-weight:800; text-align:center;
   }
+  .correct-banner{
+    background:rgba(31,214,122,.14); border:2px solid var(--green); color:#0d6b3d;
+    border-radius:14px; padding:14px 18px; font-size:clamp(18px,2.4vw,26px); font-weight:900;
+    text-align:center; animation: podiumPop .5s cubic-bezier(.34,1.56,.64,1);
+  }
+  .correct-banner span{ color:var(--green); }
 
   .stage{flex:1; display:flex; flex-direction:column; padding:20px 28px; gap:14px;}
   .stage-top{display:flex; align-items:center; justify-content:space-between;}
@@ -341,6 +347,34 @@ async function safeSet(key, value, shared){
   }catch(e){ console.error('fb set failed', key, e); return false; }
 }
 
+async function submitAnswer(qIndex, playerId, color){
+  try{
+    const { ref, set, db } = window.__fb;
+    await set(ref(db, `quiz_answers/${qIndex}/${playerId}`), JSON.stringify({choice: color, answeredAt: Date.now()}));
+    return true;
+  }catch(e){ console.error('submitAnswer failed', e); return false; }
+}
+async function getAnswers(qIndex){
+  try{
+    const { ref, get, db } = window.__fb;
+    const snap = await get(ref(db, `quiz_answers/${qIndex}`));
+    if(!snap.exists()) return {};
+    const raw = snap.val();
+    const out = {};
+    Object.entries(raw).forEach(([pid, v]) => {
+      try{ out[pid] = typeof v === 'string' ? JSON.parse(v) : v; }catch(e){}
+    });
+    return out;
+  }catch(e){ console.error('getAnswers failed', e); return {}; }
+}
+async function clearAnswers(qIndex){
+  try{
+    const { ref, remove, db } = window.__fb;
+    await remove(ref(db, `quiz_answers/${qIndex}`));
+    return true;
+  }catch(e){ console.error('clearAnswers failed', e); return false; }
+}
+
 function shapeSVG(color){
   const shapes = {
     blue: '<svg class="shape-svg" viewBox="0 0 24 24" fill="#fff"><path d="M12 2 L22 22 L2 22 Z"/></svg>',
@@ -352,10 +386,20 @@ function shapeSVG(color){
 }
 
 let __audioCtx = null;
+function ensureAudioUnlocked(){
+  try{
+    if(!__audioCtx){ __audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    if(__audioCtx.state === 'suspended'){ __audioCtx.resume(); }
+  }catch(e){ }
+}
+document.addEventListener('click', ensureAudioUnlocked);
+document.addEventListener('touchstart', ensureAudioUnlocked, {passive:true});
+
 function playBeep(freq, duration){
   try{
     if(!__audioCtx) __audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const ctx = __audioCtx;
+    if(ctx.state === 'suspended') return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
@@ -594,7 +638,7 @@ async function renderHostApp(){
       await safeSet('quiz:session', session, true);
       return route();
     }
-    await safeSet('quiz:answers:'+index, {}, true);
+    await clearAnswers(index);
     const queuedBoosts = await safeGet('quiz:bonusQueue', true) || {};
     await safeSet('quiz:activeBoosts', queuedBoosts, true);
     await safeSet('quiz:bonusQueue', {}, true);
@@ -665,7 +709,7 @@ async function renderHostApp(){
         playBeep(secondsLeft === 1 ? 1100 : 700, secondsLeft === 1 ? 0.25 : 0.1);
       }
 
-      const answers = await safeGet('quiz:answers:'+idx, true) || {};
+      const answers = await getAnswers(idx);
       const players = await safeGet('quiz:players', true) || {};
       const totalPlayers = Object.keys(players).length;
       const answeredCount = Object.keys(answers).length;
@@ -683,8 +727,22 @@ async function renderHostApp(){
   }
 
   async function revealAndScore(idx, q){
-    const answersForReveal = await safeGet('quiz:answers:'+idx, true) || {};
+    const answersForReveal = await getAnswers(idx);
     const grid = document.getElementById('answersGrid');
+    const skipBtn = document.getElementById('skipBtn');
+    const answeredPill = document.getElementById('answeredPill');
+    if(skipBtn) skipBtn.classList.add('hidden');
+    if(answeredPill) answeredPill.classList.add('hidden');
+
+    const stageTop = document.querySelector('.stage-top');
+    if(stageTop){
+      const correctText = q.opts[q.correct];
+      const banner = document.createElement('div');
+      banner.className = 'correct-banner';
+      banner.innerHTML = `✅ الإجابة الصحيحة: <span>${escapeHtml(correctText)}</span>`;
+      stageTop.insertAdjacentElement('afterend', banner);
+    }
+
     if(grid){
       grid.querySelectorAll('.answer-tile').forEach(tile => {
         const c = tile.dataset.color;
@@ -699,9 +757,9 @@ async function renderHostApp(){
         else tile.classList.add('dim-reveal');
       });
     }
-    await new Promise(r => setTimeout(r, 1800));
+    await new Promise(r => setTimeout(r, 2400));
 
-    const answers = await safeGet('quiz:answers:'+idx, true) || {};
+    const answers = await getAnswers(idx);
     const players = await safeGet('quiz:players', true) || {};
     let scores = await safeGet('quiz:scores', true) || {};
     const activeBoosts = await safeGet('quiz:activeBoosts', true) || {};
@@ -1082,7 +1140,7 @@ async function renderPlayerApp(){
 
   async function renderColorButtons(idx){
     hasAnsweredThisQ = false;
-    const answers = await safeGet('quiz:answers:'+idx, true) || {};
+    const answers = await getAnswers(idx);
     if(answers[playerId]){ hasAnsweredThisQ = true; }
 
     if(hasAnsweredThisQ){ renderLocked(); return; }
@@ -1101,10 +1159,7 @@ async function renderPlayerApp(){
         if(hasAnsweredThisQ) return;
         hasAnsweredThisQ = true;
         const color = btn.dataset.color;
-        const answers2 = await safeGet('quiz:answers:'+idx, true) || {};
-        if(answers2[playerId]) { renderLocked(); return; }
-        answers2[playerId] = {choice: color, answeredAt: Date.now()};
-        await safeSet('quiz:answers:'+idx, answers2, true);
+        await submitAnswer(idx, playerId, color);
         renderLocked(color);
       });
     });
