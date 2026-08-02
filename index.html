@@ -160,12 +160,6 @@
     border-radius:50%; width:22px; height:22px; font-size:13px; font-weight:900; line-height:1;
     cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;
   }
-  .bonus-btn{
-    background:rgba(255,209,102,.15); color:var(--gold); border:1px solid rgba(255,209,102,.4);
-    border-radius:10px; padding:6px 12px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap;
-  }
-  .bonus-btn.active{background:var(--gold); color:#2a1c00;}
-  .bonus-btn:disabled{opacity:.3; cursor:not-allowed;}
   .skip-btn{
     background:rgba(255,59,78,.12); color:var(--red); border:1px solid rgba(255,59,78,.4);
     border-radius:10px; padding:6px 14px; font-size:13px; font-weight:800; cursor:pointer;
@@ -180,6 +174,15 @@
     text-align:center; animation: podiumPop .5s cubic-bezier(.34,1.56,.64,1);
   }
   .correct-banner span{ color:var(--green); }
+  .fastest-banner{
+    background:rgba(224,164,0,.14); border:2px solid var(--gold); color:#8a6400;
+    border-radius:14px; padding:10px 16px; font-size:clamp(15px,2vw,20px); font-weight:900;
+    text-align:center; animation: podiumPop .5s cubic-bezier(.34,1.56,.64,1) .15s backwards;
+  }
+  .fastest-banner span{ color:var(--gold); }
+  .streak-badge{
+    font-size:13px; font-weight:800; color:var(--red); white-space:nowrap;
+  }
 
   .stage{flex:1; display:flex; flex-direction:column; padding:20px 28px; gap:14px;}
   .stage-top{display:flex; align-items:center; justify-content:space-between;}
@@ -602,9 +605,9 @@ async function renderHostApp(){
       const scores = await safeGet('quiz:scores', true) || {};
       delete scores[pid];
       await safeSet('quiz:scores', scores, true);
-      const bonusUsed = await safeGet('quiz:bonusUsed', true) || {};
-      delete bonusUsed[pid];
-      await safeSet('quiz:bonusUsed', bonusUsed, true);
+      const streaks = await safeGet('quiz:streaks', true) || {};
+      delete streaks[pid];
+      await safeSet('quiz:streaks', streaks, true);
     });
 
     pollLobby();
@@ -639,9 +642,6 @@ async function renderHostApp(){
       return route();
     }
     await clearAnswers(index);
-    const queuedBoosts = await safeGet('quiz:bonusQueue', true) || {};
-    await safeSet('quiz:activeBoosts', queuedBoosts, true);
-    await safeSet('quiz:bonusQueue', {}, true);
     session = {state:'question', currentIndex:index, questionStartedAt: Date.now(), revealed:false};
     await safeSet('quiz:session', session, true);
     route();
@@ -657,9 +657,8 @@ async function renderHostApp(){
     const q = questions[idx];
     if(!q){ session.state='final'; await safeSet('quiz:session', session, true); return route(); }
 
-    const players = await safeGet('quiz:players', true) || {};
-    const activeBoosts = await safeGet('quiz:activeBoosts', true) || {};
-    const boostedNames = Object.keys(activeBoosts).map(pid => players[pid]?.name).filter(Boolean);
+    const isFinalQuestion = idx === questions.length - 1;
+    const qMultiplier = isFinalQuestion ? 3 : (q.double ? 2 : 1);
 
     app.innerHTML = `
       <div class="stage">
@@ -673,8 +672,11 @@ async function renderHostApp(){
             </div>
           </div>
         </div>
-        ${q.double ? `<div class="boost-banner" style="background:rgba(255,59,78,.12); border-color:rgba(255,59,78,.4); color:var(--red);">🔥 سؤال مضاعف: كل النقاط ×2 لهذا السؤال!</div>` : ''}
-        ${boostedNames.length ? `<div class="boost-banner">🎁 مضاعفة النقاط مفعّلة لـ: ${boostedNames.map(escapeHtml).join('، ')}</div>` : ''}
+        ${isFinalQuestion
+          ? `<div class="boost-banner" style="background:rgba(224,164,0,.14); border-color:var(--gold); color:#8a6400; font-size:15px;">👑 السؤال الحاسم: كل النقاط ×3 لهذا السؤال!</div>`
+          : q.double
+            ? `<div class="boost-banner" style="background:rgba(255,59,78,.12); border-color:rgba(255,59,78,.4); color:var(--red);">🔥 سؤال مضاعف: كل النقاط ×2 لهذا السؤال!</div>`
+            : ''}
         <div class="qbox display-face">${escapeHtml(q.text)}</div>
         <div class="answers-grid" id="answersGrid">
           ${COLORS.map(c => `
@@ -690,7 +692,7 @@ async function renderHostApp(){
 
     document.getElementById('skipBtn').addEventListener('click', async ()=>{
       clearInterval(stageTimerInterval); clearInterval(stagePollInterval);
-      await revealAndScore(idx, q);
+      await revealAndScore(idx, q, qMultiplier);
     });
 
     let lastBeepSecond = null;
@@ -719,20 +721,26 @@ async function renderHostApp(){
       const allAnswered = totalPlayers > 0 && answeredCount >= totalPlayers;
       if(remaining <= 0 || allAnswered){
         clearInterval(stageTimerInterval); clearInterval(stagePollInterval);
-        await revealAndScore(idx, q);
+        await revealAndScore(idx, q, qMultiplier);
       }
     }
     tick();
     stageTimerInterval = setInterval(tick, 500);
   }
 
-  async function revealAndScore(idx, q){
+  async function revealAndScore(idx, q, qMultiplier){
     const answersForReveal = await getAnswers(idx);
     const grid = document.getElementById('answersGrid');
     const skipBtn = document.getElementById('skipBtn');
     const answeredPill = document.getElementById('answeredPill');
     if(skipBtn) skipBtn.classList.add('hidden');
     if(answeredPill) answeredPill.classList.add('hidden');
+
+    const players = await safeGet('quiz:players', true) || {};
+
+    const correctAnswersEarly = Object.entries(answersForReveal)
+      .filter(([pid, a]) => a.choice === q.correct)
+      .sort((a,b) => a[1].answeredAt - b[1].answeredAt);
 
     const stageTop = document.querySelector('.stage-top');
     if(stageTop){
@@ -741,6 +749,17 @@ async function renderHostApp(){
       banner.className = 'correct-banner';
       banner.innerHTML = `✅ الإجابة الصحيحة: <span>${escapeHtml(correctText)}</span>`;
       stageTop.insertAdjacentElement('afterend', banner);
+
+      if(correctAnswersEarly.length){
+        const fastestPid = correctAnswersEarly[0][0];
+        const fastestName = players[fastestPid]?.name;
+        if(fastestName){
+          const fastBanner = document.createElement('div');
+          fastBanner.className = 'fastest-banner';
+          fastBanner.innerHTML = `⚡ الأسرع: <span>${escapeHtml(fastestName)}</span>`;
+          banner.insertAdjacentElement('afterend', fastBanner);
+        }
+      }
     }
 
     if(grid){
@@ -760,20 +779,29 @@ async function renderHostApp(){
     await new Promise(r => setTimeout(r, 2400));
 
     const answers = await getAnswers(idx);
-    const players = await safeGet('quiz:players', true) || {};
     let scores = await safeGet('quiz:scores', true) || {};
-    const activeBoosts = await safeGet('quiz:activeBoosts', true) || {};
+    let streaks = await safeGet('quiz:streaks', true) || {};
 
     const correctAnswers = Object.entries(answers)
       .filter(([pid, a]) => a.choice === q.correct)
       .sort((a,b) => a[1].answeredAt - b[1].answeredAt);
+    const correctPidSet = new Set(correctAnswers.map(([pid]) => pid));
+
+    Object.keys(players).forEach(pid => {
+      if(correctPidSet.has(pid)) streaks[pid] = (streaks[pid] || 0) + 1;
+      else streaks[pid] = 0;
+    });
+
+    function streakMultiplier(streak){
+      return 1 + Math.min(Math.max(streak - 1, 0), 5) * 0.1;
+    }
 
     const n = correctAnswers.length;
     const deltas = {};
     correctAnswers.forEach(([pid, a], rank) => {
       let pts = n <= 1 ? 1000 : Math.round(1000 - (rank / (n)) * 500);
-      if(q.double) pts = pts * 2;
-      if(activeBoosts[pid]) pts = pts * 2;
+      pts = pts * qMultiplier;
+      pts = Math.round(pts * streakMultiplier(streaks[pid]));
       deltas[pid] = pts;
       scores[pid] = (scores[pid] || 0) + pts;
     });
@@ -782,7 +810,22 @@ async function renderHostApp(){
 
     await safeSet('quiz:scores', scores, true);
     await safeSet('quiz:lastDeltas', deltas, true);
-    await safeSet('quiz:activeBoosts', {}, true);
+    await safeSet('quiz:streaks', streaks, true);
+
+    let stats = await safeGet('quiz:stats', true) || {};
+    if(correctAnswers.length){
+      const fastestPid = correctAnswers[0][0];
+      const fastestMs = correctAnswers[0][1].answeredAt - session.questionStartedAt;
+      if(!stats.fastest || fastestMs < stats.fastest.ms){
+        stats.fastest = {pid: fastestPid, name: players[fastestPid]?.name || '', ms: fastestMs, qIndex: idx};
+      }
+    }
+    Object.entries(streaks).forEach(([pid, s]) => {
+      if(s >= 2 && (!stats.longestStreak || s > stats.longestStreak.streak)){
+        stats.longestStreak = {pid, name: players[pid]?.name || '', streak: s};
+      }
+    });
+    await safeSet('quiz:stats', stats, true);
 
     session.state = 'roundresults';
     await safeSet('quiz:session', session, true);
@@ -793,14 +836,13 @@ async function renderHostApp(){
     const players = await safeGet('quiz:players', true) || {};
     const scores = await safeGet('quiz:scores', true) || {};
     const deltas = await safeGet('quiz:lastDeltas', true) || {};
+    const streaks = await safeGet('quiz:streaks', true) || {};
     const questions = (await safeGet('quiz:questions', true) || []).filter(q => q.text.trim());
     const idx = session.currentIndex;
     const isLast = idx >= questions.length - 1;
-    const bonusUsed = await safeGet('quiz:bonusUsed', true) || {};
-    const bonusQueue = await safeGet('quiz:bonusQueue', true) || {};
 
     const rows = Object.entries(players)
-      .map(([pid, p]) => ({pid, name:p.name, total:scores[pid]||0, delta:deltas[pid]||0}))
+      .map(([pid, p]) => ({pid, name:p.name, total:scores[pid]||0, delta:deltas[pid]||0, streak:streaks[pid]||0}))
       .sort((a,b) => b.total - a.total);
 
     let rankMoveMap = {};
@@ -810,6 +852,16 @@ async function renderHostApp(){
       const prevRank = {}; prevOrder.forEach((r,i) => { prevRank[r.pid] = i; });
       const curRank = {}; rows.forEach((r,i) => { curRank[r.pid] = i; });
       rows.forEach(r => { rankMoveMap[r.pid] = prevRank[r.pid] - curRank[r.pid]; });
+
+      let stats = await safeGet('quiz:stats', true) || {};
+      let bestPid = null, bestMove = 0;
+      Object.entries(rankMoveMap).forEach(([pid, move]) => {
+        if(move > bestMove){ bestMove = move; bestPid = pid; }
+      });
+      if(bestPid && bestMove >= 2 && (!stats.biggestJump || bestMove > stats.biggestJump.move)){
+        stats.biggestJump = {pid: bestPid, name: players[bestPid]?.name || '', move: bestMove, qIndex: idx};
+        await safeSet('quiz:stats', stats, true);
+      }
     }
 
     app.innerHTML = `
@@ -817,30 +869,17 @@ async function renderHostApp(){
         <span class="qnum">النتائج بعد سؤال ${idx+1}</span>
         <h1 class="title display-face">لوحة النقاط</h1>
         <div class="scoreboard" id="scoreboard"></div>
-        ${!isLast && rows.length ? `
-        <div class="scoreboard" id="bonusPanel">
-          <span class="qnum" style="margin-bottom:4px;">🎁 بونص مضاعفة النقاط (للسؤال القادم)</span>
-          ${rows.map(r => {
-            const used = bonusUsed[r.pid] || 0;
-            const remaining = 2 - used;
-            const queued = !!bonusQueue[r.pid];
-            const disabled = remaining <= 0 && !queued;
-            return `
-              <div class="score-row" style="justify-content:space-between;">
-                <div class="score-name" style="flex:none; min-width:110px;">${escapeHtml(r.name)}</div>
-                <button class="bonus-btn ${queued?'active':''}" data-pid="${r.pid}" ${disabled?'disabled':''}>
-                  ${queued ? '✅ مفعّل - إلغاء' : `🎁 استخدام البونص (${remaining}/2)`}
-                </button>
-              </div>
-            `;
-          }).join('')}
-        </div>
-        ` : ''}
         <button class="btn" id="nextBtn">${isLast ? 'عرض النتيجة النهائية 🏆' : 'السؤال التالي ▶'}</button>
       </div>
     `;
 
     const board = document.getElementById('scoreboard');
+
+    function streakBadge(streak){
+      if(streak < 2) return '';
+      const fires = '🔥'.repeat(Math.min(streak - 1, 5));
+      return `<span class="streak-badge">${fires}×${streak}</span>`;
+    }
 
     function buildRow(r, rankNum, startTotal){
       const div = document.createElement('div');
@@ -848,7 +887,7 @@ async function renderHostApp(){
       div.dataset.pid = r.pid;
       div.innerHTML = `
         <div class="score-rank" id="rank-${r.pid}">${rankNum}</div>
-        <div class="score-name">${escapeHtml(r.name)}</div>
+        <div class="score-name">${escapeHtml(r.name)} ${streakBadge(r.streak)}</div>
         <div class="move-arrow" id="arrow-${r.pid}"></div>
         <div class="score-delta">${r.delta > 0 ? '+'+r.delta : '—'}</div>
         <div class="score-total display-face" id="total-${r.pid}">${startTotal}</div>
@@ -934,128 +973,150 @@ async function renderHostApp(){
       });
     }
 
-    const bonusPanel = document.getElementById('bonusPanel');
-    if(bonusPanel){
-      bonusPanel.addEventListener('click', async (e)=>{
-        const btn = e.target.closest('.bonus-btn');
-        if(!btn || btn.disabled) return;
-        const pid = btn.dataset.pid;
-        const curUsed = await safeGet('quiz:bonusUsed', true) || {};
-        const curQueue = await safeGet('quiz:bonusQueue', true) || {};
-        if(curQueue[pid]){
-          delete curQueue[pid];
-          curUsed[pid] = Math.max(0, (curUsed[pid]||0) - 1);
-        } else {
-          if((curUsed[pid]||0) >= 2) return;
-          curUsed[pid] = (curUsed[pid]||0) + 1;
-          curQueue[pid] = true;
-        }
-        await safeSet('quiz:bonusUsed', curUsed, true);
-        await safeSet('quiz:bonusQueue', curQueue, true);
-        renderRoundResults();
-      });
-    }
     document.getElementById('nextBtn').addEventListener('click', ()=> startQuestion(idx+1));
   }
 
   async function renderFinal(){
     const players = await safeGet('quiz:players', true) || {};
     const scores = await safeGet('quiz:scores', true) || {};
+    const stats = await safeGet('quiz:stats', true) || {};
     const rows = Object.entries(players)
       .map(([pid, p]) => ({pid, name:p.name, total:scores[pid]||0}))
       .sort((a,b) => b.total - a.total);
 
-    const [first, second, third, ...rest] = rows;
+    const highlightItems = [];
+    if(stats.fastest && stats.fastest.name){
+      highlightItems.push({ icon:'⚡', label:'أسرع إجابة الليلة', value:`${escapeHtml(stats.fastest.name)} — ${(stats.fastest.ms/1000).toFixed(1)} ثانية` });
+    }
+    if(stats.longestStreak && stats.longestStreak.name){
+      highlightItems.push({ icon:'🔥', label:'أطول سلسلة إجابات صحيحة', value:`${escapeHtml(stats.longestStreak.name)} — ${stats.longestStreak.streak} متتالية` });
+    }
+    if(stats.biggestJump && stats.biggestJump.name){
+      highlightItems.push({ icon:'🚀', label:'أكبر قفزة بالترتيب', value:`${escapeHtml(stats.biggestJump.name)} — صعد ${stats.biggestJump.move} مركز بسؤال واحد` });
+    }
+
+    if(highlightItems.length === 0){
+      return proceedToPodium();
+    }
+
     app.innerHTML = `
       <div class="podium-wrap">
-        <span class="brand display-face">🏆 النتيجة النهائية</span>
-        <div class="podium" id="podium"></div>
-        <div class="rest-list" id="restList"></div>
-        <button class="btn ghost small hidden" id="restartBtn">لعبة جديدة (إعادة الإعداد)</button>
+        <span class="brand display-face">✨ لقطات الليلة</span>
+        <div class="scoreboard" id="highlightsList" style="max-width:560px;"></div>
+        <button class="btn" id="toPodiumBtn">التتويج 🏆</button>
       </div>
     `;
-
-    const podium = document.getElementById('podium');
-    const restListEl = document.getElementById('restList');
-    const restartBtn = document.getElementById('restartBtn');
-
-    function podiumCol(r, place, cls, medal){
-      return `
-        <div class="podium-col ${cls} podium-reveal">
-          <span class="medal">${medal}</span>
-          <span class="podium-name">${escapeHtml(r.name)}</span>
-          <span class="podium-score">${r.total} نقطة</span>
-          <div class="podium-block display-face">${place}</div>
+    const list = document.getElementById('highlightsList');
+    highlightItems.forEach((item, i) => {
+      const row = document.createElement('div');
+      row.className = 'score-row';
+      row.style.cssText = `opacity:0; animation: fadeInUp .5s ease forwards; animation-delay:${i*0.25}s;`;
+      row.innerHTML = `
+        <div class="score-rank" style="font-size:20px;">${item.icon}</div>
+        <div class="score-name" style="flex-direction:column; align-items:flex-start; display:flex;">
+          <span style="color:var(--dim); font-size:12px; font-weight:700;">${item.label}</span>
+          <span style="font-weight:900; font-size:16px;">${item.value}</span>
         </div>
       `;
-    }
-
-    function launchConfetti(){
-      const container = document.createElement('div');
-      container.style.cssText = 'position:fixed; inset:0; pointer-events:none; overflow:hidden; z-index:50;';
-      document.body.appendChild(container);
-      const colors = [COLOR_HEX.blue, COLOR_HEX.red, COLOR_HEX.yellow, COLOR_HEX.green, '#ffd166', '#ffffff'];
-      for(let i=0;i<70;i++){
-        const piece = document.createElement('div');
-        const size = 6 + Math.random()*8;
-        const left = Math.random()*100;
-        const delay = Math.random()*0.6;
-        const duration = 2.2 + Math.random()*1.6;
-        const color = colors[Math.floor(Math.random()*colors.length)];
-        const rotate = Math.random()*360;
-        piece.style.cssText = `
-          position:absolute; top:-5%; left:${left}%; width:${size}px; height:${size*0.5}px;
-          background:${color}; opacity:.9; transform:rotate(${rotate}deg);
-          animation: confettiFall ${duration}s ease-in ${delay}s forwards;
-        `;
-        container.appendChild(piece);
-      }
-      setTimeout(()=> container.remove(), 4500);
-    }
-
-    function playCheer(){
-      const notes = [523.25, 659.25, 783.99, 1046.5, 1046.5];
-      notes.forEach((f,i) => setTimeout(()=> playBeep(f, i===notes.length-1 ? 0.6 : 0.3), i*140));
-    }
-
-    restListEl.innerHTML = rest.map((r,i) => `
-      <div class="score-row" style="opacity:0; animation: fadeInUp .5s ease forwards; animation-delay:${(i*0.1)+0.1}s;">
-        <div class="score-rank">${i+4}</div>
-        <div class="score-name">${escapeHtml(r.name)}</div>
-        <div class="score-total display-face">${r.total}</div>
-      </div>
-    `).join('');
-
-    await new Promise(res => setTimeout(res, rest.length ? 1600 : 500));
-
-    if(third){
-      podium.insertAdjacentHTML('beforeend', podiumCol(third,3,'p3','🥉'));
-      await new Promise(res => setTimeout(res, 1500));
-    }
-    if(second){
-      podium.insertAdjacentHTML('afterbegin', podiumCol(second,2,'p2','🥈'));
-      await new Promise(res => setTimeout(res, 1500));
-    }
-    if(first){
-      const firstHtml = podiumCol(first,1,'p1','🥇');
-      const p2el = podium.querySelector('.podium-col.p2');
-      if(p2el){ p2el.insertAdjacentHTML('afterend', firstHtml); }
-      else { podium.insertAdjacentHTML('afterbegin', firstHtml); }
-      const p1el = podium.querySelector('.podium-col.p1');
-      if(p1el) p1el.classList.add('winner-pop');
-      launchConfetti();
-      playCheer();
-    }
-
-    restartBtn.classList.remove('hidden');
-    restartBtn.addEventListener('click', async ()=>{
-      if(!confirm('سيتم مسح اللاعبين والنقاط الحالية. متابعة؟')) return;
-      await safeSet('quiz:players', {}, true);
-      await safeSet('quiz:scores', {}, true);
-      session = {state:'lobby', currentIndex:-1, questionStartedAt:null, revealed:false};
-      await safeSet('quiz:session', session, true);
-      route();
+      list.appendChild(row);
     });
+    document.getElementById('toPodiumBtn').addEventListener('click', proceedToPodium);
+
+    async function proceedToPodium(){
+      const [first, second, third, ...rest] = rows;
+      app.innerHTML = `
+        <div class="podium-wrap">
+          <span class="brand display-face">🏆 النتيجة النهائية</span>
+          <div class="podium" id="podium"></div>
+          <div class="rest-list" id="restList"></div>
+          <button class="btn ghost small hidden" id="restartBtn">لعبة جديدة (إعادة الإعداد)</button>
+        </div>
+      `;
+
+      const podium = document.getElementById('podium');
+      const restListEl = document.getElementById('restList');
+      const restartBtn = document.getElementById('restartBtn');
+
+      function podiumCol(r, place, cls, medal){
+        return `
+          <div class="podium-col ${cls} podium-reveal">
+            <span class="medal">${medal}</span>
+            <span class="podium-name">${escapeHtml(r.name)}</span>
+            <span class="podium-score">${r.total} نقطة</span>
+            <div class="podium-block display-face">${place}</div>
+          </div>
+        `;
+      }
+
+      function launchConfetti(){
+        const container = document.createElement('div');
+        container.style.cssText = 'position:fixed; inset:0; pointer-events:none; overflow:hidden; z-index:50;';
+        document.body.appendChild(container);
+        const colors = [COLOR_HEX.blue, COLOR_HEX.red, COLOR_HEX.yellow, COLOR_HEX.green, '#ffd166', '#ffffff'];
+        for(let i=0;i<70;i++){
+          const piece = document.createElement('div');
+          const size = 6 + Math.random()*8;
+          const left = Math.random()*100;
+          const delay = Math.random()*0.6;
+          const duration = 2.2 + Math.random()*1.6;
+          const color = colors[Math.floor(Math.random()*colors.length)];
+          const rotate = Math.random()*360;
+          piece.style.cssText = `
+            position:absolute; top:-5%; left:${left}%; width:${size}px; height:${size*0.5}px;
+            background:${color}; opacity:.9; transform:rotate(${rotate}deg);
+            animation: confettiFall ${duration}s ease-in ${delay}s forwards;
+          `;
+          container.appendChild(piece);
+        }
+        setTimeout(()=> container.remove(), 4500);
+      }
+
+      function playCheer(){
+        const notes = [523.25, 659.25, 783.99, 1046.5, 1046.5];
+        notes.forEach((f,i) => setTimeout(()=> playBeep(f, i===notes.length-1 ? 0.6 : 0.3), i*140));
+      }
+
+      restListEl.innerHTML = rest.map((r,i) => `
+        <div class="score-row" style="opacity:0; animation: fadeInUp .5s ease forwards; animation-delay:${(i*0.1)+0.1}s;">
+          <div class="score-rank">${i+4}</div>
+          <div class="score-name">${escapeHtml(r.name)}</div>
+          <div class="score-total display-face">${r.total}</div>
+        </div>
+      `).join('');
+
+      await new Promise(res => setTimeout(res, rest.length ? 1600 : 500));
+
+      if(third){
+        podium.insertAdjacentHTML('beforeend', podiumCol(third,3,'p3','🥉'));
+        await new Promise(res => setTimeout(res, 1500));
+      }
+      if(second){
+        podium.insertAdjacentHTML('afterbegin', podiumCol(second,2,'p2','🥈'));
+        await new Promise(res => setTimeout(res, 1500));
+      }
+      if(first){
+        const firstHtml = podiumCol(first,1,'p1','🥇');
+        const p2el = podium.querySelector('.podium-col.p2');
+        if(p2el){ p2el.insertAdjacentHTML('afterend', firstHtml); }
+        else { podium.insertAdjacentHTML('afterbegin', firstHtml); }
+        const p1el = podium.querySelector('.podium-col.p1');
+        if(p1el) p1el.classList.add('winner-pop');
+        launchConfetti();
+        playCheer();
+      }
+
+      restartBtn.classList.remove('hidden');
+      restartBtn.addEventListener('click', async ()=>{
+        if(!confirm('سيتم مسح اللاعبين والنقاط الحالية. متابعة؟')) return;
+        await safeSet('quiz:players', {}, true);
+        await safeSet('quiz:scores', {}, true);
+        await safeSet('quiz:streaks', {}, true);
+        await safeSet('quiz:stats', {}, true);
+        session = {state:'lobby', currentIndex:-1, questionStartedAt:null, revealed:false};
+        await safeSet('quiz:session', session, true);
+        route();
+      });
+    }
   }
 }
 
